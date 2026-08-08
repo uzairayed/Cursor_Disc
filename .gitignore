@@ -1,0 +1,22 @@
+node_modules/
+dist/
+logs/
+history/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+state.json
+projects.json
+discord-project-channels.json
+.secrets/
+
+# Remotion / motion / browser demo (local experiments + renders)
+demo/
+videos/
+motion-graphics-skill/
+**/renders/
+**/out/
+*.mp4
+*.webm

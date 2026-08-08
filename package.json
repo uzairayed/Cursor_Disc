@@ -1,0 +1,22 @@
+{
+  "name": "cursor-bridge",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cursor Agent bridge monorepo (Discord)",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @cursor-bridge/core && npm run build -w @cursor-bridge/discord",
+    "dev": "npm run dev -w @cursor-bridge/discord",
+    "start": "npm run start -w @cursor-bridge/discord",
+    "typecheck": "npm run typecheck -w @cursor-bridge/core && npm run typecheck -w @cursor-bridge/discord",
+    "test": "npm run test -w @cursor-bridge/core && npm run test -w @cursor-bridge/discord",
+    "test:watch": "npm run test:watch -w @cursor-bridge/core",
+    "gmail:auth": "npm run build -w @cursor-bridge/core && npx tsx packages/core/src/integrations/gmail-auth.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

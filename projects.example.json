@@ -1,0 +1,18 @@
+{
+  "dirs": [
+    "/path/to/your/projects"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".next"
+  ],
+  "aliases": {
+    "my-app": "/path/to/your/projects/my-app",
+    "general": "/path/to/Cursor_Disc/general"
+  },
+  "previewPorts": {
+    "my-app": 3000
+  }
+}
