@@ -1,7 +1,5 @@
 import {
   VoiceSession,
-  createGmailTransport,
-  loadGmailConfigFromEnv,
   synthesizeSpeech,
   transcribeVoicePcm,
   type MessageRouter,
@@ -138,13 +136,10 @@ export class DiscordVoiceManager {
 
   private createSession(guildId: string): VoiceSession {
     const apiKey = this.config.openaiApiKey!;
-    const gmailCfg = loadGmailConfigFromEnv(process.env, this.config.rootDir);
-    const gmail = gmailCfg ? createGmailTransport(gmailCfg) : null;
     const conversationKey = `discord:voice:${guildId}`;
 
     return new VoiceSession({
       allowedUserIds: this.config.discordAllowedUserIds,
-      gmail,
       stopSpeaking: () => {
         this.player.stop(true);
       },

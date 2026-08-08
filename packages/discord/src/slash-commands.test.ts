@@ -11,8 +11,6 @@ describe("buildSlashCommandBodies", () => {
       [
         "ask",
         "cancel_plan",
-        "gmail_auth",
-        "gmail_code",
         "go",
         "help",
         "join",
@@ -33,13 +31,11 @@ describe("buildSlashCommandBodies", () => {
     );
   });
 
-  it("registers voice and gmail assistant commands", () => {
+  it("registers voice assistant commands", () => {
     const bodies = buildSlashCommandBodies();
     expect(bodies.find((c) => c.name === "join")?.description).toMatch(/voice/i);
     expect(bodies.find((c) => c.name === "leave")).toBeTruthy();
     expect(bodies.find((c) => c.name === "voice_status")).toBeTruthy();
-    const gmailCode = bodies.find((c) => c.name === "gmail_code");
-    expect(gmailCode?.options?.[0]).toMatchObject({ name: "code", required: true });
   });
 
   it("requires text on /prompt and prompt on /ask", () => {

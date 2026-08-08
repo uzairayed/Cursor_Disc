@@ -27,7 +27,6 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "googleapis": "^173.0.0",
     "ws": "^8.21.1"
   }
 }

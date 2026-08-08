@@ -1,14 +1,10 @@
 export type VoiceIntent =
   | { kind: "datetime" }
-  | { kind: "mail" }
   | { kind: "command"; text: string }
   | { kind: "agent"; text: string };
 
 const DATETIME =
   /\b(what('?s| is) (the )?(date|time)( today| now)?|what('?s| is) today'?s date|what time is it|tell me the (date|time)|date and time|current (date|time)|today'?s date)\b/i;
-
-const MAIL =
-  /\b(check my (e-?mail|inbox)|any unread (e-?mail|mail|messages?)|summarize my (inbox|e-?mail)|new e-?mails?|unread (e-?mail|mail)|read my (e-?mail|inbox))\b/i;
 
 const COMMANDS =
   /^(help|hi|hello|status|stop|stop all|new chat|plan|go|run|cancel plan|projects|current|what project am i on\??)(\b|$)/i;
@@ -17,7 +13,7 @@ const SWITCH = /^(switch to|use|open)\s+\S+/i;
 
 /** Bot TTS / acoustic-echo fragments that must not become Cursor prompts. */
 const ECHO =
-  /\b(listening|working on it|ask me the date|check your email|give me a cursor|talk when ready|sorry,? i couldn'?t|gmail not connected|ready\.?$)\b/i;
+  /\b(listening|working on it|ask me the date|give me a cursor|talk when ready|sorry,? i couldn'?t|ready\.?$)\b/i;
 
 export function isEchoTranscript(raw: string): boolean {
   const text = raw.trim().replace(/\s+/g, " ");
@@ -55,7 +51,6 @@ export function classifyVoiceIntent(raw: string): VoiceIntent {
   if (!text) return { kind: "agent", text: "" };
 
   if (DATETIME.test(text)) return { kind: "datetime" };
-  if (MAIL.test(text)) return { kind: "mail" };
 
   const lower = text.toLowerCase();
   if (COMMANDS.test(lower) || SWITCH.test(lower)) {

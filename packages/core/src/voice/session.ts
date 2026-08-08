@@ -1,9 +1,3 @@
-import {
-  formatInboxSummary,
-  GmailNotConnectedError,
-  listUnreadMessages,
-  type GmailTransport,
-} from "../integrations/gmail.js";
 import { VadSegmenter, type VadOptions } from "../audio/vad.js";
 import {
   classifyVoiceIntent,
@@ -26,7 +20,6 @@ export interface VoiceSessionDeps {
   /** Hard-stop current TTS playback (barge-in). */
   stopSpeaking?: () => void | Promise<void>;
   transcribe: (audio: Buffer) => Promise<string>;
-  gmail?: GmailTransport | null;
   handleCommand?: (text: string) => Promise<string | null | undefined>;
   handleAgent?: (
     text: string,
@@ -38,11 +31,10 @@ export interface VoiceSessionDeps {
   createVad?: () => VadLike;
   vadOptions?: VadOptions;
   now?: () => Date;
-  mailMax?: number;
   /** Extra ms to keep mic ignored after a full turn ends (default 600). */
   postSpeakMuteMs?: number;
   /**
-   * Fixed coalesce wait. When omitted, adaptive: 0ms for date/mail/commands,
+   * Fixed coalesce wait. When omitted, adaptive: 0ms for date/commands,
    * ~400ms for complete agent asks, ~900ms for thin/truncated fragments.
    */
   coalesceMs?: number;
@@ -280,10 +272,6 @@ export class VoiceSession {
         );
         return;
       }
-      if (intent.kind === "mail") {
-        await this.handleMail();
-        return;
-      }
       if (intent.kind === "command") {
         // stop during open listening — cancel any lingering turn
         if (/^stop(\s+all)?$/.test(intent.text)) {
@@ -328,15 +316,6 @@ export class VoiceSession {
         { allowInterrupt: true }
       );
     } catch (err) {
-      if (err instanceof GmailNotConnectedError) {
-        await this.withTurn(
-          async () => {
-            await this.deps.speak(err.message);
-          },
-          { allowInterrupt: true }
-        );
-        return;
-      }
       console.error("[voice] handle failed:", err);
       await this.withTurn(
         async () => {
@@ -346,44 +325,6 @@ export class VoiceSession {
       );
     } finally {
       this.dispatching = false;
-    }
-  }
-
-  private async handleMail(): Promise<void> {
-    if (!this.deps.gmail) {
-      await this.withTurn(
-        async () => {
-          await this.deps.speak("Gmail not connected; run setup");
-        },
-        { allowInterrupt: true }
-      );
-      return;
-    }
-    try {
-      const messages = await listUnreadMessages({
-        transport: this.deps.gmail,
-        max: this.deps.mailMax ?? 5,
-      });
-      await this.withTurn(
-        async (signal) => {
-          for (const chunk of spokenChunksFromText(formatInboxSummary(messages))) {
-            if (signal.aborted) return;
-            await this.deps.speak(chunk);
-          }
-        },
-        { allowInterrupt: true }
-      );
-    } catch (err) {
-      if (err instanceof GmailNotConnectedError) {
-        await this.withTurn(
-          async () => {
-            await this.deps.speak(err.message);
-          },
-          { allowInterrupt: true }
-        );
-        return;
-      }
-      throw err;
     }
   }
 }
@@ -409,7 +350,7 @@ function sleep(ms: number): Promise<void> {
 /** Shorter waits when the transcript already looks complete. */
 export function adaptiveCoalesceMs(transcript: string): number {
   const intent = classifyVoiceIntent(transcript);
-  if (intent.kind === "datetime" || intent.kind === "mail") return 0;
+  if (intent.kind === "datetime") return 0;
   if (intent.kind === "command") return 0;
   if (intent.kind === "agent") {
     if (!intent.text || isTooThinForAgent(intent.text)) return 900;

@@ -134,22 +134,6 @@ export function buildSlashCommandBodies(): RESTPostAPIChatInputApplicationComman
       name: "voice_status",
       description: "Show whether the bot is in a voice channel",
     },
-    {
-      name: "gmail_auth",
-      description: "Get a Gmail read-only OAuth link (paste code with /gmail_code)",
-    },
-    {
-      name: "gmail_code",
-      description: "Finish Gmail OAuth by pasting the authorization code",
-      options: [
-        {
-          type: ApplicationCommandOptionType.String,
-          name: "code",
-          description: "Authorization code from the Google consent screen",
-          required: true,
-        },
-      ],
-    },
   ];
 }
 
@@ -200,9 +184,7 @@ export function promptFromSlashCommand(opts: {
     case "join":
     case "leave":
     case "voice_status":
-    case "gmail_auth":
-    case "gmail_code":
-      // Handled by voice / Gmail / preview adapters — not routed to Cursor.
+      // Handled by voice / preview adapters; not routed to Cursor.
       return null;
     default:
       return null;

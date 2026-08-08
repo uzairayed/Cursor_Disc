@@ -37,13 +37,6 @@ describe("classifyVoiceIntent", () => {
     expect(isInterruptIntent("what's the date")).toBe(false);
   });
 
-  it("classifies mail requests", () => {
-    expect(classifyVoiceIntent("check my email")).toEqual({ kind: "mail" });
-    expect(classifyVoiceIntent("any unread mail")).toEqual({ kind: "mail" });
-    expect(classifyVoiceIntent("summarize my inbox")).toEqual({ kind: "mail" });
-    expect(classifyVoiceIntent("do I have new emails")).toEqual({ kind: "mail" });
-  });
-
   it("classifies bridge commands", () => {
     expect(classifyVoiceIntent("status")).toEqual({ kind: "command", text: "status" });
     expect(classifyVoiceIntent("stop")).toEqual({ kind: "command", text: "stop" });

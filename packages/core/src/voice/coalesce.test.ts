@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import { adaptiveCoalesceMs } from "./session.js";
 
 describe("adaptiveCoalesceMs", () => {
-  it("is immediate for date, mail, and commands", () => {
+  it("is immediate for date and commands", () => {
     expect(adaptiveCoalesceMs("what's the date today")).toBe(0);
-    expect(adaptiveCoalesceMs("check my email")).toBe(0);
     expect(adaptiveCoalesceMs("status")).toBe(0);
   });
 

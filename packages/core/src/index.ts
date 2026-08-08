@@ -15,12 +15,6 @@ export { transcribeAudio } from "./audio/transcribe.js";
 export { transcribeVoicePcm } from "./audio/voice-stt.js";
 export { synthesizeSpeech } from "./audio/tts.js";
 export { VoiceSession } from "./voice/session.js";
-export {
-  createGmailTransport,
-  exchangeGmailCode,
-  getGmailAuthUrl,
-  loadGmailConfigFromEnv,
-} from "./integrations/gmail.js";
 
 export { PreviewService } from "./preview/index.js";
 export type { PreviewCommandResult } from "./preview/index.js";

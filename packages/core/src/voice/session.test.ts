@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { GmailNotConnectedError, type GmailTransport } from "../integrations/gmail.js";
 import { VoiceSession } from "./session.js";
 
 function pcmLoud(bytes = 640): Buffer {
@@ -168,49 +167,6 @@ describe("VoiceSession", () => {
     expect(handleAgent).not.toHaveBeenCalled();
   });
 
-  it("summarizes unread mail via gmail transport", async () => {
-    const speak = vi.fn(async () => undefined);
-    const transport: GmailTransport = {
-      isConnected: () => true,
-      listUnread: vi.fn(async () => [
-        { id: "1", subject: "Hello", from: "a@b.com", date: "today" },
-      ]),
-    };
-    const session = new VoiceSession({
-      allowedUserIds: ["owner"],
-      speak,
-      transcribe: vi.fn(async () => "check my email"),
-      gmail: transport,
-      createVad: () => ({
-        push: () => Buffer.from("utt"),
-        flush: () => null,
-      }),
-      ...base,
-    });
-
-    await session.onPcm("owner", pcmLoud());
-    await flushCoalesce();
-    expect(speak.mock.calls[0]![0]).toMatch(/Hello/);
-  });
-
-  it("speaks not-connected when gmail missing", async () => {
-    const speak = vi.fn(async () => undefined);
-    const session = new VoiceSession({
-      allowedUserIds: ["owner"],
-      speak,
-      transcribe: vi.fn(async () => "check my email"),
-      createVad: () => ({
-        push: () => Buffer.from("utt"),
-        flush: () => null,
-      }),
-      ...base,
-    });
-
-    await session.onPcm("owner", pcmLoud());
-    await flushCoalesce();
-    expect(speak.mock.calls[0]![0]).toMatch(/not connected/i);
-  });
-
   it("routes commands through handleCommand and speaks the reply", async () => {
     const speak = vi.fn(async () => undefined);
     const handleCommand = vi.fn(async () => "Idle — no runs.");
@@ -296,28 +252,4 @@ describe("VoiceSession", () => {
     expect(speak).not.toHaveBeenCalled();
   });
 
-  it("surfaces GmailNotConnectedError message", async () => {
-    const speak = vi.fn(async () => undefined);
-    const transport: GmailTransport = {
-      isConnected: () => true,
-      listUnread: vi.fn(async () => {
-        throw new GmailNotConnectedError();
-      }),
-    };
-    const session = new VoiceSession({
-      allowedUserIds: ["owner"],
-      speak,
-      transcribe: vi.fn(async () => "any unread mail"),
-      gmail: transport,
-      createVad: () => ({
-        push: () => Buffer.from("utt"),
-        flush: () => null,
-      }),
-      ...base,
-    });
-
-    await session.onPcm("owner", pcmLoud());
-    await flushCoalesce();
-    expect(speak.mock.calls[0]![0]).toMatch(/not connected/i);
-  });
 });

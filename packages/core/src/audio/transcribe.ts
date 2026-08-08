@@ -3,7 +3,7 @@ import { basename } from "node:path";
 
 /** Bias STT toward assistant vocabulary (Whisper / gpt-4o-transcribe prompt). */
 export const VOICE_STT_PROMPT =
-  "Personal Discord assistant. Phrases: what's the date, what time is it, check my email, status, stop, stop all, help, switch to project, Cursor coding tasks.";
+  "Personal Discord assistant. Phrases: what's the date, what time is it, status, stop, stop all, help, switch to project, Cursor coding tasks.";
 
 export type TranscribeAudioOpts = {
   apiKey: string;

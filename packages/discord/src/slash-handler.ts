@@ -21,10 +21,6 @@ import { ProjectChannelRegistry } from "./project-channels.js";
 import { threadNameForPrompt } from "./reply-destination.js";
 import { createSlashDelivery } from "./slash-delivery.js";
 import { promptFromSlashCommand } from "./slash-commands.js";
-import {
-  handleGmailAuthSlash,
-  handleGmailCodeSlash,
-} from "./voice/gmail-slash.js";
 import { handleVoiceSlashCommand } from "./voice/handler.js";
 import {
   buildGeneralModeBanner,
@@ -127,15 +123,6 @@ export async function handleDiscordSlashCommand(opts: {
     projectChannels,
   });
   router.projects.setCurrent(workspace.projectKey);
-
-  if (interaction.commandName === "gmail_auth") {
-    await handleGmailAuthSlash({ interaction, config });
-    return;
-  }
-  if (interaction.commandName === "gmail_code") {
-    await handleGmailCodeSlash({ interaction, config });
-    return;
-  }
 
   if (
     await handleVoiceSlashCommand({

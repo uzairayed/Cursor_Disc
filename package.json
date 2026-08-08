@@ -13,8 +13,7 @@
     "start": "npm run start -w @cursor-bridge/discord",
     "typecheck": "npm run typecheck -w @cursor-bridge/core && npm run typecheck -w @cursor-bridge/discord",
     "test": "npm run test -w @cursor-bridge/core && npm run test -w @cursor-bridge/discord",
-    "test:watch": "npm run test:watch -w @cursor-bridge/core",
-    "gmail:auth": "npm run build -w @cursor-bridge/core && npx tsx packages/core/src/integrations/gmail-auth.ts"
+    "test:watch": "npm run test:watch -w @cursor-bridge/core"
   },
   "engines": {
     "node": ">=20"

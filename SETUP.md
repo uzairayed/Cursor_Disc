@@ -11,9 +11,9 @@ Run the Discord → Cursor bridge on your Mac in about 15 minutes.
 
 Optional later (skip for first run):
 
-- `OPENAI_API_KEY` — voice notes + voice assistant
-- `ffmpeg` (`brew install ffmpeg`) — voice TTS playback
-- `cloudflared` (`brew install cloudflared`) — `/preview` tunnels
+- `OPENAI_API_KEY`: voice notes + voice assistant
+- `ffmpeg` (`brew install ffmpeg`): voice TTS playback
+- `cloudflared` (`brew install cloudflared`): `/preview` tunnels
 
 ---
 
@@ -31,7 +31,7 @@ npm install
 
 1. Open the [Discord Developer Portal](https://discord.com/developers/applications) → **New Application** → name it anything.
 2. Left sidebar → **Bot** → **Add Bot** (or Reset Token if it already exists).
-3. Copy the **token** — you’ll paste it into `.env` soon. Don’t share it.
+3. Copy the **token**. You’ll paste it into `.env` soon. Don’t share it.
 4. On the same Bot page, turn on **Message Content Intent** (under Privileged Gateway Intents). Save.
 5. Left sidebar → **OAuth2** → **URL Generator**:
    - Scopes: `bot` and `applications.commands`
@@ -114,11 +114,11 @@ Example shape:
 }
 ```
 
-- `dirs` — folders whose child projects show up in the picker  
-- `aliases` — short names → absolute paths (use these in Discord: `switch to myapp`)  
+- `dirs`: folders whose child projects show up in the picker  
+- `aliases`: short names → absolute paths (use these in Discord: `switch to myapp`)  
 - Keep a `general` alias if you want the open-ended workspace
 
-Changes to `projects.json` are picked up on the next project switch — no restart needed.
+Changes to `projects.json` are picked up on the next project switch; no restart needed.
 
 ---
 
@@ -153,7 +153,7 @@ Leave this terminal open while you use it.
 ## 8. Smoke test
 
 1. In Discord, **DM the bot** (or use an allowlisted channel).
-2. Type `/help` — slash commands register on startup (guilds listed in `DISCORD_ALLOWED_GUILD_IDS` get them instantly).
+2. Type `/help`. Slash commands register on startup (guilds listed in `DISCORD_ALLOWED_GUILD_IDS` get them instantly).
 3. Try `/ask prompt: what project am I on?` or just say `help`.
 4. Pick a project (`1`, or `switch to myapp`), then send a real prompt with `/prompt`.
 
@@ -169,7 +169,7 @@ If slash commands don’t appear: re-invite with the `applications.commands` sco
 | Bot ignores you | Your user ID isn’t in the allowlist, or the channel isn’t in `DISCORD_ALLOWED_CHANNEL_IDS` |
 | Bot ignores messages in a server | Enable **Message Content Intent** in the Developer Portal |
 | No slash commands | Re-invite with `applications.commands`; set `DISCORD_ALLOWED_GUILD_IDS` for instant guild sync |
-| Cursor never runs | `cursor` not on PATH — fix PATH or set `CURSOR_BIN` |
+| Cursor never runs | `cursor` not on PATH; fix PATH or set `CURSOR_BIN` |
 | Images work, PDFs don’t | Only images + audio are supported as attachments (max 25MB) |
 | Voice notes fail | Set `OPENAI_API_KEY` |
 
@@ -189,6 +189,5 @@ Optional extras (after the basic flow works):
 
 - Voice assistant → see README “Voice assistant”
 - Phone preview → `brew install cloudflared`, then `/preview` in a project channel
-- Gmail for voice → set `GMAIL_*` vars, then `npm run gmail:auth`
 
 Full feature reference: [README.md](./README.md).
