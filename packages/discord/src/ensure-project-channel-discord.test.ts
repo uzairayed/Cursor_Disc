@@ -46,10 +46,7 @@ describe("ensureGuildProjectChannel", () => {
   it("adopts an existing guild channel with the same name", async () => {
     const reg = registry();
     const channels = new Map([
-      [
-        "chan-old",
-        { id: "chan-old", name: "fleet", type: ChannelType.GuildText },
-      ],
+      ["chan-old", { id: "chan-old", name: "fleet", type: ChannelType.GuildText }],
     ]);
 
     const guild = {
@@ -110,7 +107,7 @@ describe("ensureGuildProjectChannel", () => {
       expect.objectContaining({
         name: "cliproom",
         type: ChannelType.GuildText,
-      })
+      }),
     );
     expect(reg.get("g1", "cliproom")).toBe("chan-new");
   });

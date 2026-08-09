@@ -47,7 +47,7 @@ describe("transcribeAudio", () => {
         apiKey: "bad",
         filePath,
         fetchImpl: fetchImpl as unknown as typeof fetch,
-      })
+      }),
     ).rejects.toThrow(/whisper|transcri/i);
   });
 

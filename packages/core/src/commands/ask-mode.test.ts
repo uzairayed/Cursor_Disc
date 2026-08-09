@@ -20,7 +20,6 @@ function setup(): AppConfig {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: "crm",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -33,12 +32,15 @@ function setup(): AppConfig {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
 }
 
-function delivery(replies: string[]): DeliveryContext {
+function delivery(replies: string[], projectKey = "crm"): DeliveryContext {
   return {
     platform: "discord",
+    projectKey,
     sourceId: "u:c",
     conversationKey: "discord:c",
     surface: "project",
@@ -58,7 +60,6 @@ describe("MessageRouter ask mode", () => {
   it("runs prompts with executionMode ask and skips plan-first", async () => {
     const config = setup();
     const router = new MessageRouter(config);
-    router.projects.setCurrent("crm");
     const run = vi.spyOn(router.runners, "runAcquired").mockImplementation(async (opts) => {
       router.runners.markIdle(opts.workspace);
       return {
@@ -87,7 +88,6 @@ describe("MessageRouter ask mode", () => {
     const config = setup();
     mkdirSync(config.generalDir, { recursive: true });
     const router = new MessageRouter(config);
-    router.projects.setCurrent("general");
     const run = vi.spyOn(router.runners, "runAcquired").mockImplementation(async (opts) => {
       router.runners.markIdle(opts.workspace);
       return {
@@ -103,7 +103,7 @@ describe("MessageRouter ask mode", () => {
     });
 
     const replies: string[] = [];
-    const d = delivery(replies);
+    const d = delivery(replies, "general");
     d.surface = "general";
     await router.handle("news for karachi", d);
 
@@ -115,7 +115,6 @@ describe("MessageRouter ask mode", () => {
     const config = setup();
     mkdirSync(config.generalDir, { recursive: true });
     const router = new MessageRouter(config);
-    router.projects.setCurrent("general");
     const run = vi.spyOn(router.runners, "runAcquired").mockImplementation(async (opts) => {
       router.runners.markIdle(opts.workspace);
       return {
@@ -130,7 +129,7 @@ describe("MessageRouter ask mode", () => {
       };
     });
 
-    const d = delivery([]);
+    const d = delivery([], "general");
     d.surface = "general";
     await router.handle("how are you", d);
 
@@ -140,7 +139,6 @@ describe("MessageRouter ask mode", () => {
   it("keeps project surface on agent unless ask is requested", async () => {
     const config = setup();
     const router = new MessageRouter(config);
-    router.projects.setCurrent("crm");
     const run = vi.spyOn(router.runners, "runAcquired").mockImplementation(async (opts) => {
       router.runners.markIdle(opts.workspace);
       return {

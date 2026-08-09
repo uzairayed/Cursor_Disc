@@ -1,6 +1,6 @@
 export {
-  DevServerManager,
   type DevServerEnsureResult,
+  DevServerManager,
   type DevServerSpawnFn,
 } from "./dev-server.js";
 export {
@@ -11,7 +11,6 @@ export {
   portBelongsToProject,
 } from "./port-owner.js";
 export {
-  PreviewService,
   formatPreviewBinaryMissing,
   formatPreviewDevServerFailed,
   formatPreviewError,
@@ -20,21 +19,22 @@ export {
   formatPreviewReady,
   formatPreviewStopped,
   loadPreviewPorts,
-  parsePreviewPortsEnv,
-  resolvePreviewPort,
   type PreviewCommandResult,
   type PreviewPortsMap,
+  PreviewService,
   type PreviewServiceOptions,
   type PreviewStartInput,
+  parsePreviewPortsEnv,
+  resolvePreviewPort,
 } from "./service.js";
 export {
   CloudflareTunnelManager,
-  PREVIEW_PICK_PARAM,
-  PreviewTunnelError,
   extractCloudflareTunnelUrl,
   joinPreviewUrl,
-  probeLocalPort,
-  withPreviewQuery,
+  PREVIEW_PICK_PARAM,
   type PreviewSpawnFn,
+  PreviewTunnelError,
+  probeLocalPort,
   type TunnelHandle,
+  withPreviewQuery,
 } from "./tunnel.js";

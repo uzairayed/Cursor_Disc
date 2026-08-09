@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DeliveryContext } from "../channels/types.js";
 import { discordProfile } from "../channels/profiles.js";
+import type { DeliveryContext } from "../channels/types.js";
 import type { AppConfig } from "../config/index.js";
 import type { CursorRunOptions, CursorRunResult } from "../cursor/runner.js";
 import { MessageRouter } from "./router.js";
@@ -25,7 +25,7 @@ function idleResult(overrides: Partial<CursorRunResult> = {}): CursorRunResult {
 /** Mock runAcquired while still releasing the reserved slot (real impl does this). */
 function mockRunAcquired(
   router: MessageRouter,
-  impl: (opts: CursorRunOptions) => Promise<CursorRunResult> | CursorRunResult
+  impl: (opts: CursorRunOptions) => Promise<CursorRunResult> | CursorRunResult,
 ) {
   return vi.spyOn(router.runners, "runAcquired").mockImplementation(async (opts) => {
     try {
@@ -44,7 +44,7 @@ function setup(): { config: AppConfig; workspace: string; fleetWorkspace: string
   mkdirSync(fleetWorkspace);
   writeFileSync(
     join(root, "projects.json"),
-    JSON.stringify({ crm: workspace, fleet: fleetWorkspace })
+    JSON.stringify({ crm: workspace, fleet: fleetWorkspace }),
   );
   return {
     workspace,
@@ -57,30 +57,33 @@ function setup(): { config: AppConfig; workspace: string; fleetWorkspace: string
       stateFile: join(root, "state.json"),
       generalDir: join(root, "general"),
       cursorBin: "cursor",
-      defaultProject: "crm",
       appName: "CursorDiscord",
       cursorTimeoutMin: 15,
       openaiApiKey: null,
       voiceTtsVoice: "alloy",
       voiceSttMode: "realtime",
       retentionDays: 7,
-    previewDefaultPort: 3000,
-    previewCloudflaredBin: "cloudflared",
-    previewPortsEnv: null,
-    cursorPlanModel: null,
-    cursorAgentModel: null,
-    cursorAskModel: null,
+      previewDefaultPort: 3000,
+      previewCloudflaredBin: "cloudflared",
+      previewPortsEnv: null,
+      cursorPlanModel: null,
+      cursorAgentModel: null,
+      cursorAskModel: null,
+      cursorMaxConcurrent: 3,
+      logPrompts: false,
     },
   };
 }
 
 function makeDelivery(
   replies: string[],
+  projectKey = "crm",
   reacts?: string[],
-  sourceId = "discord"
+  sourceId = "discord",
 ): DeliveryContext {
   return {
     platform: "discord",
+    projectKey,
     reply: async (t) => {
       replies.push(t);
     },
@@ -100,12 +103,15 @@ describe("MessageRouter", () => {
     vi.restoreAllMocks();
   });
 
-  it("explains unknown project names in plain language", async () => {
+  it("explains an unknown delivery project in plain language", async () => {
     const { config } = setup();
     const router = new MessageRouter(config);
+    const run = vi.spyOn(router.runners, "runAcquired");
     const replies: string[] = [];
-    await router.handle("switch to nope", makeDelivery(replies));
+    await router.handle("do something", makeDelivery(replies, "nope"));
     expect(replies[0]).toMatch(/don't have a project/i);
+    expect(replies[0]).toMatch(/nope/i);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("queues prompts when the same workspace is busy", async () => {
@@ -131,12 +137,33 @@ describe("MessageRouter", () => {
 
     router.runners.markRunning(workspace, "crm");
 
-    router.projects.setCurrent("fleet");
     const fleetReplies: string[] = [];
-    await router.handle("fleet task", makeDelivery(fleetReplies));
+    await router.handle("fleet task", makeDelivery(fleetReplies, "fleet"));
 
     expect(fleetReplies[0]).not.toMatch(/queued/i);
     expect(projectsRun).toEqual(["fleet"]);
+  });
+
+  it("keeps overlapping messages from two channels in their own workspaces", async () => {
+    const { config, workspace, fleetWorkspace } = setup();
+    const router = new MessageRouter(config);
+    const ranIn: string[] = [];
+
+    mockRunAcquired(router, async (opts) => {
+      ranIn.push(opts.workspace);
+      return idleResult();
+    });
+
+    const crmReplies: string[] = [];
+    const fleetReplies: string[] = [];
+    // Both in flight at once — the second must not inherit the first's project.
+    const crm = router.handle("crm task", makeDelivery(crmReplies, "crm"));
+    const fleet = router.handle("fleet task", makeDelivery(fleetReplies, "fleet"));
+    await Promise.all([crm, fleet]);
+
+    expect(ranIn.slice().sort()).toEqual([fleetWorkspace, workspace].sort());
+    expect(crmReplies.some((r) => /queued/i.test(r))).toBe(false);
+    expect(fleetReplies.some((r) => /queued/i.test(r))).toBe(false);
   });
 
   it("queues when global concurrency cap is reached", async () => {
@@ -148,7 +175,7 @@ describe("MessageRouter", () => {
     mkdirSync(alpha);
     writeFileSync(
       config.projectsFile,
-      JSON.stringify({ crm: workspace, fleet: fleetWorkspace, third, alpha })
+      JSON.stringify({ crm: workspace, fleet: fleetWorkspace, third, alpha }),
     );
 
     const router = new MessageRouter(config);
@@ -156,9 +183,8 @@ describe("MessageRouter", () => {
     router.runners.markRunning(fleetWorkspace, "fleet");
     router.runners.markRunning(alpha, "alpha");
 
-    router.projects.setCurrent("third");
     const replies: string[] = [];
-    await router.handle("another task", makeDelivery(replies));
+    await router.handle("another task", makeDelivery(replies, "third"));
 
     expect(replies[0]).toMatch(/queued/i);
     expect(replies[0]).toMatch(/waiting for a free agent/i);
@@ -179,10 +205,16 @@ describe("MessageRouter", () => {
 
     router.runners.markRunning(workspace, "crm");
 
-    await router.handle("from-thread-a", makeDelivery(threadAReplies, undefined, "thread-a"));
+    await router.handle(
+      "from-thread-a",
+      makeDelivery(threadAReplies, "crm", undefined, "thread-a"),
+    );
     expect(threadAReplies[0]).toMatch(/queued/i);
 
-    await router.handle("from-thread-b", makeDelivery(threadBReplies, undefined, "thread-b"));
+    await router.handle(
+      "from-thread-b",
+      makeDelivery(threadBReplies, "crm", undefined, "thread-b"),
+    );
     expect(threadBReplies[0]).toMatch(/queued/i);
 
     router.runners.markIdle(workspace);
@@ -196,7 +228,7 @@ describe("MessageRouter", () => {
     expect(threadAReplies.some((r) => r.includes("done:from-thread-b"))).toBe(false);
   });
 
-  it("runs queued prompts with their bound project even after switching current project", async () => {
+  it("runs queued prompts with the project they were admitted with", async () => {
     const { config, workspace } = setup();
     const router = new MessageRouter(config);
     const runProjects: string[] = [];
@@ -207,11 +239,10 @@ describe("MessageRouter", () => {
     });
 
     router.runners.markRunning(workspace, "crm");
-    await router.handle("crm task", makeDelivery([]));
+    await router.handle("crm task", makeDelivery([], "crm"));
     router.runners.markIdle(workspace);
 
-    router.projects.setCurrent("fleet");
-    await router.handle("start drain", makeDelivery([]));
+    await router.handle("start drain", makeDelivery([], "fleet"));
 
     expect(runProjects).toContain("fleet");
     expect(runProjects).toContain("crm");
@@ -238,7 +269,7 @@ describe("MessageRouter", () => {
     const queueReplies: string[] = [];
     await router.handle("plan", makeDelivery(queueReplies));
     expect(queueReplies[0]).toMatch(/queued/i);
-    expect(router.projects.getPendingLargePrompt()).toBeNull();
+    expect(router.projects.getPendingLargePrompt("crm")).toBeNull();
 
     router.runners.markIdle(workspace);
     await router.handle("kickoff", makeDelivery([]));
@@ -255,7 +286,7 @@ describe("MessageRouter", () => {
     mkdirSync(third);
     writeFileSync(
       config.projectsFile,
-      JSON.stringify({ crm: workspace, fleet: fleetWorkspace, third })
+      JSON.stringify({ crm: workspace, fleet: fleetWorkspace, third }),
     );
 
     const router = new MessageRouter(config);
@@ -270,18 +301,15 @@ describe("MessageRouter", () => {
     router.runners.markRunning(fleetWorkspace, "fleet");
     router.runners.markRunning(third, "third");
 
-    router.projects.setCurrent("fleet");
-    await router.handle("fleet work", makeDelivery([]));
-    router.projects.setCurrent("third");
-    await router.handle("third work", makeDelivery([]));
+    await router.handle("fleet work", makeDelivery([], "fleet"));
+    await router.handle("third work", makeDelivery([], "third"));
     expect(router.queues.totalSize()).toBe(2);
 
     router.runners.markIdle(workspace);
     router.runners.markIdle(fleetWorkspace);
     router.runners.markIdle(third);
 
-    router.projects.setCurrent("crm");
-    await router.handle("kick", makeDelivery([]));
+    await router.handle("kick", makeDelivery([], "crm"));
 
     expect(started).toEqual(expect.arrayContaining(["crm", "fleet", "third"]));
     expect(started.filter((p) => p === "fleet" || p === "third").length).toBe(2);
@@ -292,9 +320,7 @@ describe("MessageRouter", () => {
     const router = new MessageRouter(config);
     const long = "x".repeat(2500);
 
-    mockRunAcquired(router, async () =>
-      idleResult({ stdout: long, chatId: "sess-1" })
-    );
+    mockRunAcquired(router, async () => idleResult({ stdout: long, chatId: "sess-1" }));
 
     const replies: string[] = [];
     const delivery = makeDelivery(replies);
@@ -315,7 +341,7 @@ describe("MessageRouter", () => {
 
     const replies: string[] = [];
     const reacts: string[] = [];
-    await router.handle("refactor auth", makeDelivery(replies, reacts));
+    await router.handle("refactor auth", makeDelivery(replies, "crm", reacts));
 
     expect(reacts).toEqual(["👀"]);
     expect(replies.some((r) => /on it|working in/i.test(r))).toBe(false);

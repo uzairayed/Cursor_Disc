@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { transcribeRealtimePcm } from "./realtime-transcribe.js";
 
 class FakeWebSocket extends EventEmitter {
@@ -9,7 +9,7 @@ class FakeWebSocket extends EventEmitter {
 
   constructor(
     public url: string,
-    public opts?: { headers?: Record<string, string> }
+    public opts?: { headers?: Record<string, string> },
   ) {
     super();
     FakeWebSocket.last = this;
@@ -26,7 +26,7 @@ class FakeWebSocket extends EventEmitter {
           JSON.stringify({
             type: "conversation.item.input_audio_transcription.completed",
             transcript: "what's the date today",
-          })
+          }),
         );
       });
     }
@@ -74,7 +74,7 @@ describe("transcribeRealtimePcm", () => {
               JSON.stringify({
                 type: "error",
                 error: { message: "model not available" },
-              })
+              }),
             );
           });
         }
@@ -87,7 +87,7 @@ describe("transcribeRealtimePcm", () => {
         pcm: Buffer.alloc(9600),
         sampleRate: 48_000,
         WebSocketImpl: ErrSocket as unknown as typeof import("ws").default,
-      })
+      }),
     ).rejects.toThrow(/model not available|Realtime STT/i);
   });
 });

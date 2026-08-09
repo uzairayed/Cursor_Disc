@@ -64,7 +64,7 @@ describe("synthesizeSpeech", () => {
         apiKey: "sk-test",
         text: "Hi",
         fetchImpl: fetchImpl as unknown as typeof fetch,
-      })
+      }),
     ).rejects.toThrow(/tts|speech/i);
   });
 });

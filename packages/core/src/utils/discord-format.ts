@@ -9,13 +9,13 @@ export function formatForDiscord(input: string): string {
 
   text = text.replace(/```([\s\S]*?)```/g, (_m, body: string) => {
     const idx = fences.length;
-    fences.push("```" + body + "```");
+    fences.push(`\`\`\`${body}\`\`\``);
     return `\u0000FENCE${idx}\u0000`;
   });
 
   text = text.replace(/`([^`\n]+)`/g, (_m, body: string) => {
     const idx = inlines.length;
-    inlines.push("`" + body + "`");
+    inlines.push(`\`${body}\``);
     return `\u0000INLINE${idx}\u0000`;
   });
 
@@ -23,8 +23,10 @@ export function formatForDiscord(input: string): string {
   // Convert WhatsApp-style *bold* (single asterisks) → **bold**
   text = text.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,]|$)/gm, "$1**$2**");
 
-  text = text.replace(/\u0000INLINE(\d+)\u0000/g, (_m, i) => inlines[Number(i)] ?? "");
-  text = text.replace(/\u0000FENCE(\d+)\u0000/g, (_m, i) => fences[Number(i)] ?? "");
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: NUL sentinel placeholders protect code spans during markdown conversion
+  text = text.replace(/\u0000INLINE([0-9]+)\u0000/g, (_m, i) => inlines[Number(i)] ?? "");
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: NUL sentinel placeholders protect code fences during markdown conversion
+  text = text.replace(/\u0000FENCE([0-9]+)\u0000/g, (_m, i) => fences[Number(i)] ?? "");
 
   return text.trim();
 }

@@ -28,7 +28,7 @@ export function resolveWorkspaceContext(opts: {
   const projectKey = opts.projectChannels.findProjectByChannelId(
     opts.guildId,
     opts.channelId,
-    opts.parentChannelId
+    opts.parentChannelId,
   );
 
   if (projectKey && projectKey !== "general") {

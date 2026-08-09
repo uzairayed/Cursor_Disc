@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CONTEXT_WARN_INPUT_TOKENS,
-  formatUsageFooter,
-  shouldWarnContext,
-} from "./usage.js";
+import { CONTEXT_WARN_INPUT_TOKENS, formatUsageFooter, shouldWarnContext } from "./usage.js";
 
 describe("usage helpers", () => {
   it("formats a short token footer", () => {
@@ -13,7 +9,7 @@ describe("usage helpers", () => {
         outputTokens: 12,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
-      })
+      }),
     ).toMatch(/~17k|17,?472/i);
   });
 
@@ -30,7 +26,7 @@ describe("usage helpers", () => {
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
       },
-      { warn: true }
+      { warn: true },
     );
     expect(footer.toLowerCase()).toMatch(/new chat|start fresh/);
   });

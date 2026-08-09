@@ -13,7 +13,7 @@ describe("parseCursorJson", () => {
       expect.objectContaining({
         result: "ok",
         session_id: "b4a27fdc-665e-492e-8f30-f4a6c607ed10",
-      })
+      }),
     );
   });
 

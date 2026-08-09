@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DiscordConfig } from "../config.js";
 import { handleVoiceSlashCommand } from "./handler.js";
 import { resetVoiceManagerForTests } from "./manager.js";
@@ -12,7 +12,6 @@ function baseConfig(): DiscordConfig {
     stateFile: "/tmp/state.json",
     generalDir: "/tmp/general",
     cursorBin: "cursor",
-    defaultProject: "general",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: "sk-test",
@@ -25,10 +24,16 @@ function baseConfig(): DiscordConfig {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
     discordBotToken: "token",
     discordAllowedUserIds: ["user-1"],
     discordAllowedChannelIds: ["chan-1"],
     discordAllowedGuildIds: [],
+    bridgeLeaseChannelId: null,
+    bridgeHost: "test-host",
+    bridgeLeaseStaleMs: 90_000,
+    bridgeForce: false,
   };
 }
 
@@ -62,7 +67,7 @@ describe("handleVoiceSlashCommand", () => {
       expect.objectContaining({
         content: expect.stringMatching(/not in a voice channel/i),
         ephemeral: true,
-      })
+      }),
     );
   });
 });

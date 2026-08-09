@@ -54,9 +54,9 @@ describe("CursorRunnerPool", () => {
     };
     vi.spyOn(pool, "getRunnerFor").mockReturnValue(runner as never);
 
-    await expect(
-      pool.run({ workspace: "/a", projectKey: "a" } as never)
-    ).rejects.toBeInstanceOf(CursorBusyError);
+    await expect(pool.run({ workspace: "/a", projectKey: "a" } as never)).rejects.toBeInstanceOf(
+      CursorBusyError,
+    );
   });
 
   it("stop(workspace) only stops that workspace runner", () => {
@@ -92,14 +92,17 @@ describe("CursorRunnerPool", () => {
   it("stopAll stops every busy runner", () => {
     const pool = new CursorRunnerPool(3);
     const stopped: string[] = [];
-    vi.spyOn(pool, "getRunnerFor").mockImplementation((workspace) => ({
-      isBusy: true,
-      stop: () => {
-        stopped.push(workspace);
-        return true;
-      },
-      run: vi.fn(),
-    }));
+    vi.spyOn(pool, "getRunnerFor").mockImplementation(
+      (workspace) =>
+        ({
+          isBusy: true,
+          stop: () => {
+            stopped.push(workspace);
+            return true;
+          },
+          run: vi.fn(),
+        }) as never,
+    );
 
     pool.markRunning("/a", "a");
     pool.markRunning("/b", "b");
@@ -142,9 +145,9 @@ describe("CursorRunnerPool", () => {
       run: vi.fn(),
     } as never);
 
-    await expect(
-      pool.run({ workspace: "/c", projectKey: "c" } as never)
-    ).rejects.toBeInstanceOf(CursorBusyError);
+    await expect(pool.run({ workspace: "/c", projectKey: "c" } as never)).rejects.toBeInstanceOf(
+      CursorBusyError,
+    );
   });
 
   it("tryAcquire is atomic with capacity", () => {

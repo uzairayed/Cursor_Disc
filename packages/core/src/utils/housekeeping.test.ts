@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync, utimesSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -43,7 +43,7 @@ describe("purgeOldFiles", () => {
       purgeOldFiles({
         dirs: [join(root, "nope")],
         retentionDays: 7,
-      })
+      }),
     ).toBe(0);
   });
 });

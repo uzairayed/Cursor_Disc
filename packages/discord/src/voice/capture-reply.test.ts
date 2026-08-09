@@ -3,9 +3,9 @@ import { pickFinalReply } from "./capture-reply.js";
 
 describe("pickFinalReply", () => {
   it("returns the last non-progress reply", () => {
-    expect(
-      pickFinalReply(["Working…", "Still working…", "Fixed the login bug."])
-    ).toBe("Fixed the login bug.");
+    expect(pickFinalReply(["Working…", "Still working…", "Fixed the login bug."])).toBe(
+      "Fixed the login bug.",
+    );
   });
 
   it("falls back to the last reply when all look like progress", () => {

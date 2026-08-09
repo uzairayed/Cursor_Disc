@@ -28,16 +28,13 @@ describe("CloudflareTunnelManager", () => {
     });
 
     const pending = mgr.ensureTunnel(3000);
-    child.stderr.emit(
-      "data",
-      Buffer.from("https://lucky-moon-1234.trycloudflare.com\n")
-    );
+    child.stderr.emit("data", Buffer.from("https://lucky-moon-1234.trycloudflare.com\n"));
     const result = await pending;
 
     expect(spawn).toHaveBeenCalledWith(
       "cloudflared",
       ["tunnel", "--url", "http://127.0.0.1:3000"],
-      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] })
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
     );
     expect(result).toEqual({
       port: 3000,

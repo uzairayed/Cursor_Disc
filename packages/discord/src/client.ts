@@ -1,42 +1,34 @@
+import { join } from "node:path";
 import {
   buildAgentPrompt,
   buildVoicePrompt,
+  type DeliveryContext,
   discordProfile,
   MessageRouter,
+  type PreviewService,
   parseProjectIntent,
   transcribeAudio,
-  type DeliveryContext,
-  type PreviewService,
 } from "@cursor-bridge/core";
 import {
   Client,
   GatewayIntentBits,
-  Partials,
   type Message,
   type OmitPartialGroupDMChannel,
+  Partials,
 } from "discord.js";
-import { join } from "node:path";
-import {
-  effectiveAllowedChannelIds,
-  isDiscordAuthorized,
-} from "./allowlist.js";
+import { effectiveAllowedChannelIds, isDiscordAuthorized } from "./allowlist.js";
+import { BridgeLeaseManager } from "./bridge-lease.js";
 import type { DiscordConfig } from "./config.js";
 import { ensureGuildProjectChannel } from "./ensure-project-channel-discord.js";
 import { isBotDirectlyMentioned, stripBotMentions } from "./mentions.js";
 import { resolveMessageContext } from "./message-context.js";
+import { resolvePlanApprovalReaction } from "./plan-reaction.js";
+import { createPreviewService, parsePreviewTextCommand } from "./preview-handler.js";
 import { ProjectChannelRegistry } from "./project-channels.js";
 import { registerSlashCommands } from "./register-slash-commands.js";
 import { mergeReplyIntoPrompt, resolveReplyContext } from "./reply-context.js";
 import { resolveReplyDestination } from "./reply-destination.js";
-import {
-  isAllowedAttachment,
-  saveDiscordAttachment,
-} from "./save-attachment.js";
-import { resolvePlanApprovalReaction } from "./plan-reaction.js";
-import {
-  createPreviewService,
-  parsePreviewTextCommand,
-} from "./preview-handler.js";
+import { isAllowedAttachment, saveDiscordAttachment } from "./save-attachment.js";
 import { handleDiscordSlashCommand } from "./slash-handler.js";
 import {
   buildGeneralModeBanner,
@@ -46,9 +38,16 @@ import {
   resolveWorkspaceContext,
 } from "./workspace-context.js";
 
-function extensionFor(name: string | null, contentType: string | null, kind: "image" | "audio"): string {
+function extensionFor(
+  name: string | null,
+  contentType: string | null,
+  kind: "image" | "audio" | "document",
+): string {
   const fromName = name?.match(/(\.[a-z0-9]+)$/i)?.[1];
   if (fromName) return fromName.toLowerCase();
+  if (kind === "document") {
+    return contentType?.includes("pdf") ? ".pdf" : ".txt";
+  }
   if (kind === "image") {
     if (contentType?.includes("jpeg") || contentType?.includes("jpg")) return ".jpg";
     if (contentType?.includes("gif")) return ".gif";
@@ -83,7 +82,8 @@ export async function buildDiscordDelivery(
     isThread: boolean;
     promptPreview: string;
     surface: "general" | "project";
-  }
+    projectKey: string;
+  },
 ): Promise<DeliveryContext> {
   const dest = await resolveReplyDestination({
     message,
@@ -94,6 +94,7 @@ export async function buildDiscordDelivery(
 
   return {
     platform: "discord",
+    projectKey: opts.projectKey,
     sourceId: `${message.author.id}:${dest.conversationId}`,
     conversationKey: `discord:${dest.conversationId}`,
     surface: opts.surface,
@@ -111,55 +112,45 @@ export async function buildDiscordDelivery(
 async function handleProjectNavigation(opts: {
   message: OmitPartialGroupDMChannel<Message<boolean>>;
   delivery: DeliveryContext;
-  router: MessageRouter;
   projectChannels: ProjectChannelRegistry;
   workspace: ReturnType<typeof resolveWorkspaceContext>;
   intentKey: string;
 }): Promise<void> {
-  const { message, delivery, router, projectChannels, workspace, intentKey } = opts;
+  const { message, delivery, projectChannels, workspace, intentKey } = opts;
   const guild = message.guild;
 
   if (workspace.mode === "project") {
     if (intentKey === workspace.projectKey) {
       await delivery.reply(
-        delivery.formatOutput(`You're already in **${workspace.projectKey.toUpperCase()}**.`)
+        delivery.formatOutput(`You're already in **${workspace.projectKey.toUpperCase()}**.`),
       );
       return;
     }
 
     let requestedChannelId: string | null = null;
-    if (intentKey !== "general" && guild) {
+    if (guild) {
       const ensured = await ensureGuildProjectChannel({
         guild,
         projectKey: intentKey,
         registry: projectChannels,
       });
       requestedChannelId = ensured.channelId;
-    } else if (intentKey === "general" && guild) {
-      const ensured = await ensureGuildProjectChannel({
-        guild,
-        projectKey: "general",
-        registry: projectChannels,
-      });
-      requestedChannelId = ensured.channelId;
     }
 
-    router.projects.setCurrent(workspace.projectKey);
     await delivery.reply(
       delivery.formatOutput(
         buildProjectLockedMessage({
           channelProjectKey: workspace.projectKey,
           requestedKey: intentKey,
           requestedChannelId,
-        })
-      )
+        }),
+      ),
     );
     return;
   }
 
   // General surface
   if (intentKey === "general") {
-    router.projects.setCurrent("general");
     if (guild) {
       const ensured = await ensureGuildProjectChannel({
         guild,
@@ -168,12 +159,8 @@ async function handleProjectNavigation(opts: {
       });
       await delivery.reply(
         delivery.formatOutput(
-          [
-            buildGeneralModeBanner(),
-            "",
-            `Home channel: <#${ensured.channelId}>`,
-          ].join("\n")
-        )
+          [buildGeneralModeBanner(), "", `Home channel: <#${ensured.channelId}>`].join("\n"),
+        ),
       );
     } else {
       await delivery.reply(delivery.formatOutput(buildGeneralModeBanner()));
@@ -184,8 +171,8 @@ async function handleProjectNavigation(opts: {
   if (!guild) {
     await delivery.reply(
       delivery.formatOutput(
-        `**${intentKey.toUpperCase()}** needs its server channel. Use the bot in your server and say \`switch to ${intentKey}\`.`
-      )
+        `**${intentKey.toUpperCase()}** needs its server channel. Use the bot in your server and say \`switch to ${intentKey}\`.`,
+      ),
     );
     return;
   }
@@ -195,15 +182,14 @@ async function handleProjectNavigation(opts: {
     projectKey: intentKey,
     registry: projectChannels,
   });
-  router.projects.setCurrent("general");
   await delivery.reply(
     delivery.formatOutput(
       buildProjectRedirectMessage({
         projectKey: intentKey,
         channelId: ensured.channelId,
         created: ensured.created,
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -213,13 +199,14 @@ export async function handleDiscordMessage(opts: {
   router: MessageRouter;
   projectChannels: ProjectChannelRegistry;
   preview?: PreviewService;
+  lease?: BridgeLeaseManager;
 }): Promise<void> {
-  const { message, config, router, projectChannels, preview } = opts;
+  const { message, config, router, projectChannels, preview, lease } = opts;
   const ctx = resolveMessageContext(message);
 
   const allowedChannelIds = effectiveAllowedChannelIds(
     config.discordAllowedChannelIds,
-    projectChannels.channelIdsForGuild(ctx.guildId)
+    projectChannels.channelIdsForGuild(ctx.guildId),
   );
 
   // Bot/self messages — ignore quietly (no log spam).
@@ -239,16 +226,19 @@ export async function handleDiscordMessage(opts: {
       allowedGuildIds: config.discordAllowedGuildIds,
     })
   ) {
+    console.log(`[discord] skip unauthorized user=${ctx.userId} channel=${ctx.channelId}`);
+    return;
+  }
+
+  if (lease && !lease.isOwner()) {
     console.log(
-      `[discord] skip unauthorized user=${ctx.userId} channel=${ctx.channelId}`
+      `[discord] skip standby host=${lease.host} owner=${lease.currentPayload()?.host ?? "?"} user=${ctx.userId}`,
     );
     return;
   }
 
   const botUserId = message.client?.user?.id ?? null;
-  const mentionedUserIds = message.mentions?.users
-    ? [...message.mentions.users.keys()]
-    : null;
+  const mentionedUserIds = message.mentions?.users ? [...message.mentions.users.keys()] : null;
   if (
     !isBotDirectlyMentioned({
       isDm: ctx.isDm,
@@ -264,9 +254,7 @@ export async function handleDiscordMessage(opts: {
 
   const rawContent = message.content?.trim() || "";
   const text =
-    !ctx.isDm && botUserId
-      ? stripBotMentions(rawContent, botUserId) || null
-      : rawContent || null;
+    !ctx.isDm && botUserId ? stripBotMentions(rawContent, botUserId) || null : rawContent || null;
   const inbox = join(config.historyDir, "inbox");
 
   const workspace = resolveWorkspaceContext({
@@ -277,33 +265,31 @@ export async function handleDiscordMessage(opts: {
     projectChannels,
   });
 
-  // Bind Cursor workspace to this Discord surface before any command/prompt.
-  router.projects.setCurrent(workspace.projectKey);
-
   const delivery = await buildDiscordDelivery(message, {
     isDm: ctx.isDm,
     isThread: ctx.isThread,
     promptPreview: text || "Cursor",
     surface: workspace.mode,
+    projectKey: workspace.projectKey,
   });
 
   const previewCmd = text ? parsePreviewTextCommand(text) : null;
   if (previewCmd) {
     if (!preview) {
       await delivery.reply(
-        delivery.formatOutput("Preview tunnels aren't configured on this bridge.")
+        delivery.formatOutput("Preview tunnels aren't configured on this bridge."),
       );
       return;
     }
     const project = router.projects.resolve(workspace.projectKey);
     console.log(
-      `← discord preview ${previewCmd.action} mode=${workspace.mode} project=${workspace.projectKey}`
+      `← discord preview ${previewCmd.action} mode=${workspace.mode} project=${workspace.projectKey}`,
     );
     if (previewCmd.action === "start") {
       await delivery.reply(
         delivery.formatOutput(
-          `Checking localhost for **${workspace.projectKey.toUpperCase()}** (starting \`npm run dev\` if needed)…`
-        )
+          `Checking localhost for **${workspace.projectKey.toUpperCase()}** (starting \`npm run dev\` if needed)…`,
+        ),
       );
     }
     const result =
@@ -334,6 +320,7 @@ export async function handleDiscordMessage(opts: {
   }
 
   const imagePaths: string[] = [];
+  const documentPaths: string[] = [];
   let voicePrompt: string | null = null;
 
   if (!text?.startsWith("/")) {
@@ -346,9 +333,7 @@ export async function handleDiscordMessage(opts: {
       if (!check.ok) {
         if (check.reason === "too_large") {
           await delivery.reply(
-            delivery.formatOutput(
-              "That attachment is too large (max 25MB). Send a smaller file."
-            )
+            delivery.formatOutput("That attachment is too large (max 25MB). Send a smaller file."),
           );
           return;
         }
@@ -367,12 +352,14 @@ export async function handleDiscordMessage(opts: {
 
         if (check.kind === "image") {
           imagePaths.push(saved);
+        } else if (check.kind === "document") {
+          documentPaths.push(saved);
         } else if (check.kind === "audio" && !voicePrompt) {
           if (!config.openaiApiKey) {
             await delivery.reply(
               delivery.formatOutput(
-                "Got an audio file, but OPENAI_API_KEY isn't set — can't transcribe it."
-              )
+                "Got an audio file, but OPENAI_API_KEY isn't set — can't transcribe it.",
+              ),
             );
             return;
           }
@@ -389,8 +376,8 @@ export async function handleDiscordMessage(opts: {
           delivery.formatOutput(
             check.kind === "audio"
               ? "Couldn't transcribe that audio. Try again or send it as text."
-              : "Couldn't download that attachment. Try sending it again."
-          )
+              : "Couldn't download that attachment. Try sending it again.",
+          ),
         );
         return;
       }
@@ -398,12 +385,9 @@ export async function handleDiscordMessage(opts: {
   }
 
   // Include the message being replied to (Discord "Reply") in the Cursor prompt.
-  const replyContext =
-    text?.startsWith("/") ? null : await resolveReplyContext(message);
+  const replyContext = text?.startsWith("/") ? null : await resolveReplyContext(message);
   const textWithReply = mergeReplyIntoPrompt(text, replyContext);
-  const baseText = voicePrompt
-    ? mergeReplyIntoPrompt(voicePrompt, replyContext)
-    : textWithReply;
+  const baseText = voicePrompt ? mergeReplyIntoPrompt(voicePrompt, replyContext) : textWithReply;
 
   const prompt = text?.startsWith("/")
     ? text
@@ -411,6 +395,7 @@ export async function handleDiscordMessage(opts: {
         text: baseText,
         imagePath: imagePaths[0] ?? null,
         extraImagePaths: imagePaths.slice(1),
+        documentPaths,
         sourceLabel: "Discord",
       });
   if (!prompt) {
@@ -420,19 +405,19 @@ export async function handleDiscordMessage(opts: {
 
   const surface = ctx.isDm ? "dm" : ctx.isThread ? "thread" : "channel→thread";
   console.log(
-    `← discord ${surface} mode=${workspace.mode} project=${workspace.projectKey} conversation=${delivery.conversationKey}: ${prompt.slice(0, 100)}`
+    `← discord ${surface} mode=${workspace.mode} project=${workspace.projectKey} conversation=${delivery.conversationKey}: ${prompt.slice(0, 100)}`,
   );
 
-  const awaitingPick = router.projects.isAwaitingProjectPick();
+  // Bare numbers are a project pick only on the general surface; in a project
+  // channel they're far more likely to be part of the prompt.
   const intent = parseProjectIntent(prompt, router.projects, {
-    allowNumber: awaitingPick || workspace.mode === "general",
+    allowNumber: workspace.mode === "general",
   });
 
   if (intent?.action === "select") {
     await handleProjectNavigation({
       message,
       delivery,
-      router,
       projectChannels,
       workspace,
       intentKey: intent.key,
@@ -449,8 +434,6 @@ export async function handleDiscordMessage(opts: {
     return;
   }
 
-  // Re-bind in case a prior command mutated state.
-  router.projects.setCurrent(workspace.projectKey);
   await router.handle(prompt, delivery);
 }
 
@@ -458,27 +441,23 @@ export async function startDiscordBridge(
   config: DiscordConfig,
   router: MessageRouter = new MessageRouter(config),
   projectChannels: ProjectChannelRegistry = new ProjectChannelRegistry(
-    join(config.rootDir, "discord-project-channels.json")
+    join(config.rootDir, "discord-project-channels.json"),
   ),
-  preview: PreviewService = createPreviewService(config)
-): Promise<Client> {
+  preview: PreviewService = createPreviewService(config),
+): Promise<{ client: Client; lease: BridgeLeaseManager }> {
   const client = createDiscordClient();
+  const lease = new BridgeLeaseManager(
+    {
+      channelId: config.bridgeLeaseChannelId,
+      host: config.bridgeHost,
+      staleMs: config.bridgeLeaseStaleMs,
+      force: config.bridgeForce,
+    },
+    client,
+  );
 
-  // Default into general workspace on boot.
-  router.projects.setCurrent("general");
-
-  client.once("clientReady", () => {
-    console.log(`Discord connected as ${client.user?.tag ?? "unknown"}.`);
-    console.log("Workspace: GENERAL for DMs/#general; project channels are locked per project.");
-    console.log(
-      `Preview tunnels: ${config.previewCloudflaredBin} (default port ${config.previewDefaultPort})`
-    );
-    void registerSlashCommands(client, config.discordAllowedGuildIds).catch((err) => {
-      console.error(
-        "Failed to register slash commands (invite the bot with applications.commands scope):",
-        err
-      );
-    });
+  const ready = new Promise<void>((resolve) => {
+    client.once("clientReady", () => resolve());
   });
 
   client.on("messageCreate", (message) => {
@@ -488,6 +467,7 @@ export async function startDiscordBridge(
       router,
       projectChannels,
       preview,
+      lease,
     }).catch((err) => {
       console.error("Failed to handle Discord message:", err);
     });
@@ -501,6 +481,7 @@ export async function startDiscordBridge(
       router,
       projectChannels,
       preview,
+      lease,
     }).catch(async (err) => {
       console.error("Failed to handle Discord slash command:", err);
       try {
@@ -523,13 +504,32 @@ export async function startDiscordBridge(
       config,
       router,
       projectChannels,
+      lease,
     }).catch((err) => {
       console.error("Failed to handle plan approval reaction:", err);
     });
   });
 
   await client.login(config.discordBotToken);
-  return client;
+  await ready;
+
+  console.log(`Discord connected as ${client.user?.tag ?? "unknown"}.`);
+  console.log("Workspace: GENERAL for DMs/#general; project channels are locked per project.");
+  console.log(
+    `Preview tunnels: ${config.previewCloudflaredBin} (default port ${config.previewDefaultPort})`,
+  );
+
+  try {
+    await registerSlashCommands(client, config.discordAllowedGuildIds);
+  } catch (err) {
+    console.error(
+      "Failed to register slash commands (invite the bot with applications.commands scope):",
+      err,
+    );
+  }
+
+  await lease.start();
+  return { client, lease };
 }
 
 async function handlePlanApprovalReaction(opts: {
@@ -538,15 +538,16 @@ async function handlePlanApprovalReaction(opts: {
   config: DiscordConfig;
   router: MessageRouter;
   projectChannels: ProjectChannelRegistry;
+  lease?: BridgeLeaseManager;
 }): Promise<void> {
-  const { reaction, user, config, router, projectChannels } = opts;
+  const { reaction, user, config, router, projectChannels, lease } = opts;
+
+  if (lease && !lease.isOwner()) return;
 
   const matched = await resolvePlanApprovalReaction({ reaction, user, router });
   if (!matched) return;
 
-  const message = reaction.message.partial
-    ? await reaction.message.fetch()
-    : reaction.message;
+  const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
 
   const channel = message.channel;
   const isDm = !message.guildId;
@@ -558,7 +559,7 @@ async function handlePlanApprovalReaction(opts: {
 
   const allowedChannelIds = effectiveAllowedChannelIds(
     config.discordAllowedChannelIds,
-    projectChannels.channelIdsForGuild(message.guildId)
+    projectChannels.channelIdsForGuild(message.guildId),
   );
 
   if (
@@ -591,12 +592,12 @@ async function handlePlanApprovalReaction(opts: {
     parentChannelId,
     projectChannels,
   });
-  // Prefer the plan's project so approval isn't blocked by a later channel switch.
-  router.projects.setCurrent(pending.projectKey);
-
   const conversationId = message.channelId;
   const delivery: DeliveryContext = {
     platform: "discord",
+    // The plan's own project, not the channel's: a ✅ approves the plan it is
+    // attached to even if that message is read from somewhere else.
+    projectKey: pending.projectKey,
     sourceId: `${user.id}:${conversationId}`,
     conversationKey: matched.conversationKey ?? `discord:${conversationId}`,
     surface: workspace.mode,
@@ -620,7 +621,7 @@ async function handlePlanApprovalReaction(opts: {
   };
 
   console.log(
-    `← discord plan ✅ user=${user.id} project=${pending.projectKey} message=${matched.messageId}`
+    `← discord plan ✅ user=${user.id} project=${pending.projectKey} message=${matched.messageId}`,
   );
   await router.handle("go", delivery);
 }

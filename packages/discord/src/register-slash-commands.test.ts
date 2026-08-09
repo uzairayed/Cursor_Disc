@@ -43,7 +43,7 @@ describe("registerSlashCommands", () => {
   it("throws when the client has no application", async () => {
     const client = { application: null, guilds: { fetch: vi.fn() } };
     await expect(registerSlashCommands(client as never, [])).rejects.toThrow(
-      /client\.application is missing/
+      /client\.application is missing/,
     );
   });
 });

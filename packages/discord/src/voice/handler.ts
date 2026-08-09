@@ -23,8 +23,7 @@ export async function handleVoiceSlashCommand(opts: {
 
   await interaction.deferReply({ ephemeral: true });
   try {
-    const msg =
-      name === "join" ? await voice.join(interaction) : await voice.leave();
+    const msg = name === "join" ? await voice.join(interaction) : await voice.leave();
     await interaction.editReply({ content: msg });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);

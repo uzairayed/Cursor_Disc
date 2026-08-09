@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  loadPreviewPorts,
-  parsePreviewPortsEnv,
-  resolvePreviewPort,
-} from "./service.js";
+import { loadPreviewPorts, parsePreviewPortsEnv, resolvePreviewPort } from "./service.js";
 
 describe("parsePreviewPortsEnv", () => {
   it("parses project:port pairs", () => {
@@ -24,7 +20,7 @@ describe("loadPreviewPorts", () => {
       loadPreviewPorts({
         dirs: [],
         previewPorts: { "Tagiser-Beta": 3000, motocards: 3001 },
-      })
+      }),
     ).toEqual({ "tagiser-beta": 3000, motocards: 3001 });
   });
 
@@ -41,7 +37,7 @@ describe("resolvePreviewPort", () => {
         projectKey: "tagiser",
         previewPorts: { tagiser: 3000 },
         defaultPort: 3000,
-      })
+      }),
     ).toBe(5173);
 
     expect(
@@ -50,7 +46,7 @@ describe("resolvePreviewPort", () => {
         projectKey: "tagiser",
         previewPorts: { tagiser: 3000 },
         defaultPort: 8080,
-      })
+      }),
     ).toBe(3000);
 
     expect(
@@ -59,7 +55,7 @@ describe("resolvePreviewPort", () => {
         projectKey: "unknown",
         previewPorts: {},
         defaultPort: 3000,
-      })
+      }),
     ).toBe(3000);
   });
 });

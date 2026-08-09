@@ -1,11 +1,12 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("node:child_process", () => ({
-  spawn: vi.fn(),
+// runner.ts spawns via cross-spawn so Windows .cmd shims work.
+vi.mock("cross-spawn", () => ({
+  default: vi.fn(),
 }));
 
-import { spawn } from "node:child_process";
+import spawn from "cross-spawn";
 import { CursorRunner } from "./runner.js";
 
 function fakeChild(): EventEmitter & {

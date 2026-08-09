@@ -1,8 +1,5 @@
 /** Wrap 16-bit little-endian mono PCM in a WAV container for STT APIs. */
-export function pcmToWav(
-  pcm: Buffer,
-  opts: { sampleRate: number; channels?: number } 
-): Buffer {
+export function pcmToWav(pcm: Buffer, opts: { sampleRate: number; channels?: number }): Buffer {
   const channels = opts.channels ?? 1;
   const bitsPerSample = 16;
   const blockAlign = channels * (bitsPerSample / 8);

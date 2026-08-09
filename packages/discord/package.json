@@ -6,10 +6,11 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "npm run build -w @cursor-bridge/core && tsc",
-    "typecheck": "npm run build -w @cursor-bridge/core && tsc --noEmit",
+    "typecheck": "npm run build -w @cursor-bridge/core && tsc -p tsconfig.typecheck.json",
     "dev": "npm run build -w @cursor-bridge/core && tsx src/index.ts",
     "start": "node dist/index.js",
     "test": "npm run build -w @cursor-bridge/core && vitest run",
+    "test:coverage": "npm run build -w @cursor-bridge/core && vitest run --coverage",
     "test:watch": "vitest"
   },
   "engines": {

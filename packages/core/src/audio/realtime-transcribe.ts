@@ -1,6 +1,6 @@
 import WebSocket from "ws";
-import { VOICE_STT_PROMPT } from "./transcribe.js";
 import { downsamplePcmMonoS16le } from "./resample.js";
+import { VOICE_STT_PROMPT } from "./transcribe.js";
 
 const REALTIME_URL = "wss://api.openai.com/v1/realtime";
 const TARGET_RATE = 24_000;
@@ -23,9 +23,7 @@ export type RealtimeTranscribeOpts = {
  * One-shot utterance transcription via OpenAI Realtime Whisper (STT only).
  * Uses the same OPENAI_API_KEY as batch Whisper / TTS.
  */
-export async function transcribeRealtimePcm(
-  opts: RealtimeTranscribeOpts
-): Promise<string> {
+export async function transcribeRealtimePcm(opts: RealtimeTranscribeOpts): Promise<string> {
   const model = opts.model ?? "gpt-realtime-whisper";
   const timeoutMs = opts.timeoutMs ?? 20_000;
   const WS = opts.WebSocketImpl ?? WebSocket;
@@ -34,7 +32,7 @@ export async function transcribeRealtimePcm(
   if (opts.sampleRate !== TARGET_RATE) {
     if (opts.sampleRate % TARGET_RATE !== 0) {
       throw new Error(
-        `Unsupported sample rate ${opts.sampleRate}; need multiple of ${TARGET_RATE}`
+        `Unsupported sample rate ${opts.sampleRate}; need multiple of ${TARGET_RATE}`,
       );
     }
     pcm = downsamplePcmMonoS16le(pcm, opts.sampleRate / TARGET_RATE);
@@ -87,7 +85,7 @@ export async function transcribeRealtimePcm(
               },
             },
           },
-        })
+        }),
       );
 
       for (let i = 0; i < pcm.byteLength; i += CHUNK_BYTES) {
@@ -96,7 +94,7 @@ export async function transcribeRealtimePcm(
           JSON.stringify({
             type: "input_audio_buffer.append",
             audio: slice.toString("base64"),
-          })
+          }),
         );
       }
       ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
@@ -116,25 +114,16 @@ export async function transcribeRealtimePcm(
       }
 
       if (event.type === "error" || event.type === "invalid_request_error") {
-        finish(
-          new Error(
-            `Realtime STT error: ${event.error?.message ?? JSON.stringify(event)}`
-          )
-        );
+        finish(new Error(`Realtime STT error: ${event.error?.message ?? JSON.stringify(event)}`));
         return;
       }
 
-      if (
-        event.type === "conversation.item.input_audio_transcription.delta" &&
-        event.delta
-      ) {
+      if (event.type === "conversation.item.input_audio_transcription.delta" && event.delta) {
         transcript += event.delta;
         return;
       }
 
-      if (
-        event.type === "conversation.item.input_audio_transcription.completed"
-      ) {
+      if (event.type === "conversation.item.input_audio_transcription.completed") {
         const finalText = (event.transcript ?? transcript).trim();
         if (!finalText) {
           finish(new Error("Realtime STT returned empty transcript"));

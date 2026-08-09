@@ -18,10 +18,7 @@ class FakeChild extends EventEmitter {
 
 function projectWithDevScript(): string {
   const root = mkdtempSync(join(tmpdir(), "preview-dev-"));
-  writeFileSync(
-    join(root, "package.json"),
-    JSON.stringify({ scripts: { dev: "next dev" } })
-  );
+  writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { dev: "next dev" } }));
   return root;
 }
 
@@ -67,7 +64,7 @@ describe("DevServerManager", () => {
       expect.objectContaining({
         cwd,
         env: expect.objectContaining({ PORT: "3000" }),
-      })
+      }),
     );
   });
 
@@ -108,7 +105,7 @@ describe("DevServerManager", () => {
       },
     });
     const result = await mgr.ensure({
-      cwd: join(tmpdir(), "does-not-exist-" + Date.now()),
+      cwd: join(tmpdir(), `does-not-exist-${Date.now()}`),
       port: 3000,
     });
     expect(result.ok).toBe(false);

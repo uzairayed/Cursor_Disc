@@ -7,9 +7,7 @@ describe("buildVoicePrompt", () => {
   });
 
   it("appends an optional caption", () => {
-    expect(buildVoicePrompt("fix login", "urgent")).toBe(
-      "(voice note)\nfix login\nurgent"
-    );
+    expect(buildVoicePrompt("fix login", "urgent")).toBe("(voice note)\nfix login\nurgent");
   });
 });
 
@@ -47,5 +45,26 @@ describe("buildAgentPrompt", () => {
     expect(out).toContain("/tmp/a.png");
     expect(out).toContain("/tmp/b.png");
     expect(out).toContain("fix login");
+  });
+
+  it("includes document paths with a read instruction", () => {
+    const out = buildAgentPrompt({
+      text: "summarize this",
+      imagePath: null,
+      documentPaths: ["/tmp/spec.pdf", "/tmp/notes.txt"],
+    });
+    expect(out).toContain("/tmp/spec.pdf");
+    expect(out).toContain("/tmp/notes.txt");
+    expect(out).toMatch(/open and read this file/i);
+    expect(out).toContain("summarize this");
+  });
+
+  it("falls back to a read request when only documents are attached", () => {
+    const out = buildAgentPrompt({
+      text: null,
+      imagePath: null,
+      documentPaths: ["/tmp/spec.pdf"],
+    });
+    expect(out).toMatch(/read this document/i);
   });
 });

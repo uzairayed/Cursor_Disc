@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -19,7 +19,6 @@ function setup(): { store: ProjectStore; projectsFile: string; root: string } {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: "crm",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -32,6 +31,8 @@ function setup(): { store: ProjectStore; projectsFile: string; root: string } {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
   return { store: new ProjectStore(config), projectsFile, root };
 }
@@ -47,13 +48,14 @@ describe("ProjectStore live reload", () => {
     expect(picker).toMatch(/FLEET/i);
   });
 
-  it("picks up new projects on switch attempt", () => {
+  it("picks up new projects when resolving a key", () => {
     const { store, projectsFile, root } = setup();
     const fleet = join(root, "fleet");
     mkdirSync(fleet);
     writeFileSync(projectsFile, JSON.stringify({ crm: join(root, "crm"), fleet }));
 
-    const set = store.setCurrent("fleet");
-    expect(set?.key).toBe("fleet");
+    const resolved = store.resolve("fleet");
+    expect(resolved?.key).toBe("fleet");
+    expect(resolved?.path).toBe(fleet);
   });
 });

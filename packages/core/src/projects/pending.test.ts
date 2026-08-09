@@ -11,7 +11,7 @@ function setup(): ProjectStore {
   mkdirSync(join(root, "fleet"));
   writeFileSync(
     join(root, "projects.json"),
-    JSON.stringify({ crm: join(root, "crm"), fleet: join(root, "fleet") })
+    JSON.stringify({ crm: join(root, "crm"), fleet: join(root, "fleet") }),
   );
   const config: AppConfig = {
     rootDir: root,
@@ -21,7 +21,6 @@ function setup(): ProjectStore {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: "crm",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -34,6 +33,8 @@ function setup(): ProjectStore {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
   return new ProjectStore(config);
 }
@@ -46,7 +47,6 @@ describe("per-project pending plan/large-prompt", () => {
       userPrompt: "crm task",
       planText: "crm plan",
     });
-    store.setCurrent("fleet");
     store.setPendingLargePrompt({
       projectKey: "fleet",
       userPrompt: "x".repeat(400),
@@ -72,8 +72,6 @@ describe("per-project pending plan/large-prompt", () => {
       approvalMessageId: "msg-fleet",
     });
 
-    expect(store.findPendingPlanByApprovalMessageId("msg-fleet")?.projectKey).toBe(
-      "fleet"
-    );
+    expect(store.findPendingPlanByApprovalMessageId("msg-fleet")?.projectKey).toBe("fleet");
   });
 });

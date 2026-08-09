@@ -134,6 +134,22 @@ export function buildSlashCommandBodies(): RESTPostAPIChatInputApplicationComman
       name: "voice_status",
       description: "Show whether the bot is in a voice channel",
     },
+    {
+      name: "bridge",
+      description: "Multi-machine bridge lease: status or take ownership",
+      options: [
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "status",
+          description: "Show which machine currently owns the bridge",
+        },
+        {
+          type: ApplicationCommandOptionType.Subcommand,
+          name: "take",
+          description: "Switch the active bridge to this machine",
+        },
+      ],
+    },
   ];
 }
 
@@ -184,7 +200,8 @@ export function promptFromSlashCommand(opts: {
     case "join":
     case "leave":
     case "voice_status":
-      // Handled by voice / preview adapters; not routed to Cursor.
+    case "bridge":
+      // Handled by voice / preview / lease adapters; not routed to Cursor.
       return null;
     default:
       return null;

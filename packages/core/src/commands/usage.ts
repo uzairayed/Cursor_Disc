@@ -14,10 +14,7 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
-export function formatUsageFooter(
-  usage: TokenUsage,
-  opts: { warn?: boolean } = {}
-): string {
+export function formatUsageFooter(usage: TokenUsage, opts: { warn?: boolean } = {}): string {
   const warn = opts.warn ?? shouldWarnContext(usage);
   const base = `_${formatTokenCount(usage.inputTokens)} tokens this turn_`;
   if (!warn) return base;

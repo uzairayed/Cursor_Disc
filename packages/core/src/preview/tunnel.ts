@@ -1,5 +1,8 @@
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { connect } from "node:net";
-import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+// cloudflared may be a .cmd shim on Windows; see the note in cursor/runner.ts.
+import nodeSpawn from "cross-spawn";
+import { killProcessTree } from "../utils/kill-tree.js";
 
 const TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i;
 
@@ -22,10 +25,7 @@ export function joinPreviewUrl(origin: string, path?: string | null): string {
 }
 
 /** Append or merge query params onto a preview URL (path may already include ?). */
-export function withPreviewQuery(
-  url: string,
-  query: Record<string, string>
-): string {
+export function withPreviewQuery(url: string, query: Record<string, string>): string {
   try {
     const parsed = new URL(url);
     for (const [key, value] of Object.entries(query)) {
@@ -47,7 +47,7 @@ export function withPreviewQuery(
  */
 export async function probeLocalPort(
   port: number,
-  opts: { timeoutMs?: number } = {}
+  opts: { timeoutMs?: number } = {},
 ): Promise<boolean> {
   const timeoutMs = opts.timeoutMs ?? 1000;
   return new Promise((resolve) => {
@@ -72,16 +72,13 @@ export async function probeLocalPort(
 export type PreviewSpawnFn = (
   command: string,
   args: readonly string[],
-  options: SpawnOptions
+  options: SpawnOptions,
 ) => ChildProcess;
 
 export class PreviewTunnelError extends Error {
   constructor(
     message: string,
-    readonly code:
-      | "PREVIEW_BIN_MISSING"
-      | "PREVIEW_TUNNEL_TIMEOUT"
-      | "PREVIEW_TUNNEL_EXIT"
+    readonly code: "PREVIEW_BIN_MISSING" | "PREVIEW_TUNNEL_TIMEOUT" | "PREVIEW_TUNNEL_EXIT",
   ) {
     super(message);
     this.name = "PreviewTunnelError";
@@ -106,11 +103,13 @@ export class CloudflareTunnelManager {
   private readonly readyTimeoutMs: number;
   private readonly byPort = new Map<number, ActiveTunnel>();
 
-  constructor(opts: {
-    bin?: string;
-    spawn?: PreviewSpawnFn;
-    readyTimeoutMs?: number;
-  } = {}) {
+  constructor(
+    opts: {
+      bin?: string;
+      spawn?: PreviewSpawnFn;
+      readyTimeoutMs?: number;
+    } = {},
+  ) {
     this.bin = opts.bin?.trim() || "cloudflared";
     this.spawn = opts.spawn ?? nodeSpawn;
     this.readyTimeoutMs = opts.readyTimeoutMs ?? 20_000;
@@ -130,17 +129,15 @@ export class CloudflareTunnelManager {
 
     let child: ChildProcess;
     try {
-      child = this.spawn(
-        this.bin,
-        ["tunnel", "--url", `http://127.0.0.1:${port}`],
-        { stdio: ["ignore", "pipe", "pipe"] }
-      );
+      child = this.spawn(this.bin, ["tunnel", "--url", `http://127.0.0.1:${port}`], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException)?.code;
       if (code === "ENOENT") {
         throw new PreviewTunnelError(
           `${this.bin} is not installed or not on PATH`,
-          "PREVIEW_BIN_MISSING"
+          "PREVIEW_BIN_MISSING",
         );
       }
       throw err;
@@ -215,8 +212,8 @@ export class CloudflareTunnelManager {
           finish(
             new PreviewTunnelError(
               `${this.bin} is not installed or not on PATH`,
-              "PREVIEW_BIN_MISSING"
-            )
+              "PREVIEW_BIN_MISSING",
+            ),
           );
           return;
         }
@@ -227,8 +224,8 @@ export class CloudflareTunnelManager {
         finish(
           new PreviewTunnelError(
             `cloudflared exited before publishing a URL (code ${code ?? "?"}) for port ${port}`,
-            "PREVIEW_TUNNEL_EXIT"
-          )
+            "PREVIEW_TUNNEL_EXIT",
+          ),
         );
       };
 
@@ -236,8 +233,8 @@ export class CloudflareTunnelManager {
         finish(
           new PreviewTunnelError(
             `Timed out waiting for cloudflared URL on port ${port}`,
-            "PREVIEW_TUNNEL_TIMEOUT"
-          )
+            "PREVIEW_TUNNEL_TIMEOUT",
+          ),
         );
       }, this.readyTimeoutMs);
 
@@ -257,9 +254,9 @@ function killChild(child: ChildProcess): Promise<void> {
     }
     const done = () => resolve();
     child.once("exit", done);
-    child.kill("SIGTERM");
+    killProcessTree(child);
     setTimeout(() => {
-      if (child.exitCode == null && !child.killed) child.kill("SIGKILL");
+      if (child.exitCode == null && !child.killed) killProcessTree(child, { force: true });
       resolve();
     }, 1500).unref?.();
   });

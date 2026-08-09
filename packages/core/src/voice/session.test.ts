@@ -36,12 +36,9 @@ describe("VoiceSession", () => {
   });
 
   it("speaks the date for datetime intent", async () => {
-    const speak = vi.fn(async () => undefined);
+    const speak = vi.fn(async (_text: string) => undefined);
     const transcribe = vi.fn(async () => "what time is it");
-    const vadPush = vi
-      .fn()
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(Buffer.from("utterance"));
+    const vadPush = vi.fn().mockReturnValueOnce(null).mockReturnValueOnce(Buffer.from("utterance"));
 
     const session = new VoiceSession({
       allowedUserIds: ["owner"],
@@ -98,12 +95,14 @@ describe("VoiceSession", () => {
 
   it("honors stop as barge-in during TTS", async () => {
     const stopSpeaking = vi.fn();
-    let releaseSpeak: (() => void) | null = null;
+    // Starts as a no-op rather than null so it stays callable: TS can't see the
+    // assignment inside the executor and would narrow a null default to never.
+    let releaseSpeak = () => {};
     const speak = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           releaseSpeak = resolve;
-        })
+        }),
     );
     const session = new VoiceSession({
       allowedUserIds: ["owner"],
@@ -123,12 +122,12 @@ describe("VoiceSession", () => {
     expect(session.getCaptureMode()).toBe("interrupt");
     await session.ingestUtterance("owner", pcmLoud());
     expect(stopSpeaking).toHaveBeenCalled();
-    releaseSpeak?.();
+    releaseSpeak();
     await turn;
   });
 
   it("merges consecutive STT fragments before calling the agent", async () => {
-    const handleAgent = vi.fn(async () => "ok");
+    const handleAgent = vi.fn(async (_text: string) => "ok");
     const speak = vi.fn(async () => undefined);
     let n = 0;
     const session = new VoiceSession({
@@ -136,9 +135,7 @@ describe("VoiceSession", () => {
       speak,
       transcribe: vi.fn(async () => {
         n += 1;
-        return n === 1
-          ? "I was asking what is the latest news for"
-          : "Kashmir";
+        return n === 1 ? "I was asking what is the latest news for" : "Kashmir";
       }),
       handleAgent,
       ...base,
@@ -189,7 +186,7 @@ describe("VoiceSession", () => {
   });
 
   it("routes agent prompts and starts Cursor without waiting on On it TTS", async () => {
-    const speak = vi.fn(async () => undefined);
+    const speak = vi.fn(async (_text: string) => undefined);
     const handleAgent = vi.fn(async () => "A".repeat(400));
     const onHeard = vi.fn(async () => undefined);
     const onText = vi.fn(async () => undefined);
@@ -251,5 +248,4 @@ describe("VoiceSession", () => {
     await flushCoalesce();
     expect(speak).not.toHaveBeenCalled();
   });
-
 });

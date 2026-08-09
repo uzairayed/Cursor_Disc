@@ -39,7 +39,7 @@ describe("formatLiveStepMessage", () => {
 
   it("formats assistant notes as chat-style lines", () => {
     expect(formatLiveStepMessage("Checking the builder next.")).toBe(
-      "💬 Checking the builder next."
+      "💬 Checking the builder next.",
     );
   });
 });
@@ -76,6 +76,7 @@ describe("createProgressBoard", () => {
     const edits: { id: string; text: string }[] = [];
     const delivery: DeliveryContext = {
       platform: "discord",
+      projectKey: "crm",
       maxChars: 2000,
       formatOutput: (t) => t,
       reply: async (text) => {
@@ -107,6 +108,7 @@ describe("createProgressBoard", () => {
     const edits: { id: string; text: string }[] = [];
     const delivery: DeliveryContext = {
       platform: "discord",
+      projectKey: "crm",
       maxChars: 2000,
       formatOutput: (t) => t,
       reply: async (text) => {

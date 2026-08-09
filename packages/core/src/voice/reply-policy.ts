@@ -30,7 +30,7 @@ export function spokenReplyFromText(text: string, maxChars: number = MAX_SPOKEN)
  */
 export function spokenChunksFromText(
   text: string,
-  opts: { chunkChars?: number; maxChars?: number } = {}
+  opts: { chunkChars?: number; maxChars?: number } = {},
 ): string[] {
   const chunkChars = opts.chunkChars ?? DEFAULT_CHUNK;
   const maxChars = opts.maxChars ?? DEFAULT_MAX_SPOKEN;
@@ -39,7 +39,10 @@ export function spokenChunksFromText(
 
   const limited =
     cleaned.length > maxChars
-      ? `${cleaned.slice(0, maxChars - 1).replace(/\s+\S*$/, "").trim()}…`
+      ? `${cleaned
+          .slice(0, maxChars - 1)
+          .replace(/\s+\S*$/, "")
+          .trim()}…`
       : cleaned;
 
   if (limited.length <= chunkChars) return [limited];

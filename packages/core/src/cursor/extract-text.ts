@@ -81,7 +81,7 @@ export function extractCursorText(stdout: string): ExtractedCursorText {
 
   const longestAssistant = assistantMessages.reduce(
     (best, cur) => (cur.length > best.length ? cur : best),
-    ""
+    "",
   );
 
   let text = resultText;
@@ -89,7 +89,7 @@ export function extractCursorText(stdout: string): ExtractedCursorText {
     !resultText ||
     (resultText.length < 220 &&
       /\b(i('ll| will)|let me)\s+(review|inspect|check|look|draft)\b|\bthen draft\b/i.test(
-        resultText
+        resultText,
       ));
   if (
     longestAssistant &&

@@ -1,6 +1,6 @@
 export function buildWorkingMessage(
   projectKey: string,
-  mode: "agent" | "plan" | "ask" = "agent"
+  mode: "agent" | "plan" | "ask" = "agent",
 ): string {
   const name = projectKey.toUpperCase();
   if (mode === "ask") {
@@ -25,9 +25,7 @@ export function buildBusyStatusMessage(projectKey: string | null): string {
 
 export function buildMultiAgentStatusMessage(
   busy: { projectKey: string }[],
-  queued:
-    | number
-    | { projectKey: string; depth: number }[]
+  queued: number | { projectKey: string; depth: number }[],
 ): string {
   const lines: string[] = [];
   if (busy.length > 0) {
@@ -35,24 +33,20 @@ export function buildMultiAgentStatusMessage(
     lines.push(
       busy.length === 1
         ? `Yes — still working in ${names}.`
-        : `Yes — ${busy.length} agents running: ${names}.`
+        : `Yes — ${busy.length} agents running: ${names}.`,
     );
   }
 
   if (typeof queued === "number") {
     if (queued > 0) {
-      lines.push(
-        `${queued} task${queued === 1 ? "" : "s"} queued across projects.`
-      );
+      lines.push(`${queued} task${queued === 1 ? "" : "s"} queued across projects.`);
     }
   } else if (queued.length > 0) {
-    const parts = queued.map(
-      (q) => `*${q.projectKey.toUpperCase()}* (${q.depth})`
-    );
+    const parts = queued.map((q) => `*${q.projectKey.toUpperCase()}* (${q.depth})`);
     lines.push(`Queued: ${parts.join(", ")}.`);
   }
 
-  lines.push("Say *stop* to cancel the current project, or *stop all* for everything.");
+  lines.push("Say *stop* to cancel this project, or *stop all* for everything.");
   return lines.join("\n");
 }
 

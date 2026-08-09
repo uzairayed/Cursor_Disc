@@ -29,9 +29,7 @@ export class ProjectChannelRegistry {
     try {
       const raw = JSON.parse(readFileSync(this.filePath, "utf8")) as unknown;
       this.data =
-        raw && typeof raw === "object" && !Array.isArray(raw)
-          ? (raw as RegistryData)
-          : {};
+        raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as RegistryData) : {};
     } catch {
       this.data = {};
     }
@@ -62,7 +60,7 @@ export class ProjectChannelRegistry {
   findProjectByChannelId(
     guildId: string | null | undefined,
     channelId: string,
-    parentChannelId?: string | null
+    parentChannelId?: string | null,
   ): string | null {
     if (!guildId) return null;
     const map = this.data[guildId] ?? {};
@@ -75,11 +73,7 @@ export class ProjectChannelRegistry {
   }
 
   /** True when this channel id is already bound to a different project key. */
-  isChannelOwnedByOtherProject(
-    guildId: string,
-    channelId: string,
-    projectKey: string
-  ): boolean {
+  isChannelOwnedByOtherProject(guildId: string, channelId: string, projectKey: string): boolean {
     const owner = this.findProjectByChannelId(guildId, channelId);
     if (!owner) return false;
     return owner !== projectKey.toLowerCase();
@@ -110,11 +104,7 @@ export async function ensureProjectChannel(opts: {
   const found = await opts.findChannelByName(baseName);
   if (
     found &&
-    !opts.registry.isChannelOwnedByOtherProject(
-      opts.guildId,
-      found.id,
-      opts.projectKey
-    )
+    !opts.registry.isChannelOwnedByOtherProject(opts.guildId, found.id, opts.projectKey)
   ) {
     opts.registry.set(opts.guildId, opts.projectKey, found.id);
     return { channelId: found.id, created: false, name: baseName };
@@ -137,8 +127,7 @@ async function allocateUniqueChannelName(opts: {
   projectKey: string;
 }): Promise<string> {
   for (let n = 0; n < 50; n++) {
-    const candidate =
-      n === 0 ? opts.baseName : `${opts.baseName.slice(0, 96)}-${n + 1}`;
+    const candidate = n === 0 ? opts.baseName : `${opts.baseName.slice(0, 96)}-${n + 1}`;
     const found = await opts.findChannelByName(candidate);
     if (!found) return candidate;
   }

@@ -1,7 +1,7 @@
 import {
-  ThreadAutoArchiveDuration,
   type Message,
   type OmitPartialGroupDMChannel,
+  ThreadAutoArchiveDuration,
 } from "discord.js";
 
 export function threadNameForPrompt(prompt: string): string {
@@ -25,7 +25,7 @@ type MessageChannel = {
 async function reactInChannel(
   channel: MessageChannel,
   messageId: string,
-  emoji: string
+  emoji: string,
 ): Promise<void> {
   const msg = await channel.messages.fetch(messageId);
   await msg.react(emoji);
@@ -34,7 +34,7 @@ async function reactInChannel(
 async function editInChannel(
   channel: MessageChannel,
   messageId: string,
-  text: string
+  text: string,
 ): Promise<void> {
   const msg = await channel.messages.fetch(messageId);
   await msg.edit(text);

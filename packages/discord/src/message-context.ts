@@ -1,8 +1,4 @@
-import {
-  ChannelType,
-  type Message,
-  type OmitPartialGroupDMChannel,
-} from "discord.js";
+import { ChannelType, type Message, type OmitPartialGroupDMChannel } from "discord.js";
 
 export interface DiscordMessageContext {
   userId: string;
@@ -18,13 +14,11 @@ export function resolveMessageContext(
   message: Pick<
     OmitPartialGroupDMChannel<Message<boolean>>,
     "author" | "channel" | "channelId" | "guildId"
-  >
+  >,
 ): DiscordMessageContext {
   const channel = message.channel;
   const isDm =
-    typeof channel.isDMBased === "function"
-      ? channel.isDMBased()
-      : channel.type === ChannelType.DM;
+    typeof channel.isDMBased === "function" ? channel.isDMBased() : channel.type === ChannelType.DM;
   const isThread =
     typeof channel.isThread === "function"
       ? channel.isThread()

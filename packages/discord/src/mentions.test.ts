@@ -8,7 +8,7 @@ describe("isBotDirectlyMentioned", () => {
         isDm: true,
         botUserId: "bot-1",
         content: "help",
-      })
+      }),
     ).toBe(true);
   });
 
@@ -19,7 +19,7 @@ describe("isBotDirectlyMentioned", () => {
         isThread: false,
         botUserId: "bot-1",
         content: "help me refactor",
-      })
+      }),
     ).toBe(false);
     expect(
       isBotDirectlyMentioned({
@@ -27,7 +27,7 @@ describe("isBotDirectlyMentioned", () => {
         isThread: false,
         botUserId: "bot-1",
         content: "<@bot-1> help me refactor",
-      })
+      }),
     ).toBe(true);
     expect(
       isBotDirectlyMentioned({
@@ -36,7 +36,7 @@ describe("isBotDirectlyMentioned", () => {
         botUserId: "bot-1",
         mentionedUserIds: ["bot-1"],
         content: "help",
-      })
+      }),
     ).toBe(true);
   });
 
@@ -47,7 +47,7 @@ describe("isBotDirectlyMentioned", () => {
         isThread: true,
         botUserId: "bot-1",
         content: "continue polishing",
-      })
+      }),
     ).toBe(true);
   });
 });

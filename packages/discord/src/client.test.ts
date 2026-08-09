@@ -1,8 +1,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { MessageRouter } from "@cursor-bridge/core";
 import { ChannelType } from "discord.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleDiscordMessage } from "./client.js";
 import type { DiscordConfig } from "./config.js";
 import { ProjectChannelRegistry } from "./project-channels.js";
@@ -21,7 +22,6 @@ function baseConfig(overrides: Partial<DiscordConfig> = {}): DiscordConfig {
     stateFile: "/tmp/state.json",
     generalDir: "/tmp/general",
     cursorBin: "cursor",
-    defaultProject: "general",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -34,23 +34,26 @@ function baseConfig(overrides: Partial<DiscordConfig> = {}): DiscordConfig {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
     discordBotToken: "token",
     discordAllowedUserIds: ["user-1"],
     discordAllowedChannelIds: ["chan-1", "parent-1"],
     discordAllowedGuildIds: [],
+    bridgeLeaseChannelId: null,
+    bridgeHost: "test-host",
+    bridgeLeaseStaleMs: 90_000,
+    bridgeForce: false,
     ...overrides,
   };
 }
 
 function mockProjects() {
   return {
-    getCurrent: vi.fn(() => ({ key: "general", path: "/tmp/general" })),
-    setCurrent: vi.fn((key: string) => ({ key, path: `/tmp/${key}` })),
-    isAwaitingProjectPick: vi.fn(() => false),
     resolve: vi.fn((name: string) => {
       const key = name.toLowerCase();
       if (["crm", "fleet", "general", "cliproom"].includes(key)) {
-        return { key, path: `/tmp/${key}` };
+        return { key, path: `/tmp/${key}`, displayPath: `/tmp/${key}` };
       }
       return null;
     }),
@@ -60,7 +63,7 @@ function mockProjects() {
 
 function mockRouter() {
   return {
-    handle: vi.fn(async () => undefined),
+    handle: vi.fn<MessageRouter["handle"]>(async () => undefined),
     projects: mockProjects(),
   };
 }
@@ -109,8 +112,7 @@ function mockMessage(opts: {
   const reacts: string[] = [];
   const channelId = opts.channelId ?? "chan-1";
   const isThread =
-    opts.channelType === ChannelType.PublicThread ||
-    opts.channelType === ChannelType.PrivateThread;
+    opts.channelType === ChannelType.PublicThread || opts.channelType === ChannelType.PrivateThread;
   const isDm = opts.channelType === ChannelType.DM;
   const guildId = opts.guildId === undefined ? "g1" : opts.guildId;
   const mentionBot = opts.mentionBot ?? !isDm;
@@ -149,7 +151,7 @@ function mockMessage(opts: {
         contentType: a.contentType,
         size: a.size,
       },
-    ])
+    ]),
   );
   const mentionUsers = new Map<string, { id: string }>();
   if (mentionBot) mentionUsers.set(BOT_ID, { id: BOT_ID });
@@ -162,10 +164,7 @@ function mockMessage(opts: {
     guildId,
     client: { user: { id: BOT_ID } },
     mentions: { users: mentionUsers },
-    guild:
-      opts.withGuild === false || isDm || !guildId
-        ? null
-        : mockGuild(guildId),
+    guild: opts.withGuild === false || isDm || !guildId ? null : mockGuild(guildId),
     channel,
     attachments,
     startThread: vi.fn(async () => thread),
@@ -226,9 +225,7 @@ describe("handleDiscordMessage", () => {
     expect(router.handle.mock.calls[0]?.[0]).toBe("help");
     expect(router.handle.mock.calls[0]?.[1]?.platform).toBe("discord");
     expect(router.handle.mock.calls[0]?.[1]?.surface).toBe("general");
-    expect(router.handle.mock.calls[0]?.[1]?.conversationKey).toBe(
-      "discord:thread-auto"
-    );
+    expect(router.handle.mock.calls[0]?.[1]?.conversationKey).toBe("discord:thread-auto");
   });
 
   it("ignores guild messages that do not @mention the bot", async () => {
@@ -264,7 +261,7 @@ describe("handleDiscordMessage", () => {
     expect(message.startThread).not.toHaveBeenCalled();
     expect(router.handle).toHaveBeenCalledOnce();
     expect(router.handle.mock.calls[0]?.[1]?.conversationKey).toBe("discord:dm-99");
-    expect(router.projects.setCurrent).toHaveBeenCalledWith("general");
+    expect(router.handle.mock.calls[0]?.[1]?.projectKey).toBe("general");
   });
 
   it("reuses an existing allowlisted parent thread without creating another", async () => {
@@ -323,9 +320,9 @@ describe("handleDiscordMessage", () => {
       router: router as never,
       projectChannels: reg,
     });
-    expect(router.projects.setCurrent).toHaveBeenCalledWith("crm");
     expect(router.handle).toHaveBeenCalledOnce();
     expect(router.handle.mock.calls[0]?.[1]?.surface).toBe("project");
+    expect(router.handle.mock.calls[0]?.[1]?.projectKey).toBe("crm");
   });
 
   it("from general, switch to a project redirects with a channel mention", async () => {
@@ -392,5 +389,67 @@ describe("handleDiscordMessage", () => {
     const replyText = String(thread.send.mock.calls[0]?.[0] ?? "");
     expect(replyText).toMatch(/CRM/);
     expect(replyText).toMatch(/<#project-chan-2>/);
+  });
+
+  it("keeps overlapping messages in different channels on their own projects", async () => {
+    const reg = emptyRegistry();
+    reg.set("g1", "crm", "project-chan-crm");
+    reg.set("g1", "fleet", "project-chan-fleet");
+    const crm = mockMessage({
+      content: "crm status",
+      channelId: "project-chan-crm",
+      guildId: "g1",
+      withGuild: false,
+    });
+    const fleet = mockMessage({
+      content: "fleet status",
+      channelId: "project-chan-fleet",
+      guildId: "g1",
+      withGuild: false,
+    });
+    const router = mockRouter();
+
+    // Hold both runs inside router.handle at the same time. The old code bound
+    // the project by mutating a single shared `currentProject` just before
+    // handing off, so the second message clobbered the first mid-run.
+    let arrived = 0;
+    let releaseBoth: () => void = () => {};
+    const bothArrived = new Promise<void>((resolve) => {
+      releaseBoth = resolve;
+    });
+    router.handle.mockImplementation(async () => {
+      arrived += 1;
+      if (arrived === 2) releaseBoth();
+      await bothArrived;
+      return undefined;
+    });
+
+    const config = baseConfig({
+      discordAllowedChannelIds: [],
+      discordAllowedGuildIds: ["g1"],
+    });
+    const first = handleDiscordMessage({
+      message: crm.message as never,
+      config,
+      router: router as never,
+      projectChannels: reg,
+    });
+    const second = handleDiscordMessage({
+      message: fleet.message as never,
+      config,
+      router: router as never,
+      projectChannels: reg,
+    });
+    await Promise.all([first, second]);
+
+    expect(router.handle).toHaveBeenCalledTimes(2);
+    expect(router.handle).toHaveBeenCalledWith(
+      "crm status",
+      expect.objectContaining({ projectKey: "crm", surface: "project" }),
+    );
+    expect(router.handle).toHaveBeenCalledWith(
+      "fleet status",
+      expect.objectContaining({ projectKey: "fleet", surface: "project" }),
+    );
   });
 });

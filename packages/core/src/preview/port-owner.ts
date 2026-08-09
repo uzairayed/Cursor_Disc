@@ -6,7 +6,7 @@ const execFileAsync = promisify(execFile);
 
 export type ExecFileFn = (
   file: string,
-  args: readonly string[]
+  args: readonly string[],
 ) => Promise<{ stdout: string; stderr: string }>;
 
 /** Parse PID of the first LISTEN row from `lsof -iTCP:PORT -sTCP:LISTEN`. */
@@ -58,15 +58,11 @@ export interface PortOwner {
 /** Resolve which project directory owns the process listening on localhost:port. */
 export async function inspectPortOwner(
   port: number,
-  opts: { execFile?: ExecFileFn } = {}
+  opts: { execFile?: ExecFileFn } = {},
 ): Promise<PortOwner | null> {
   const run = opts.execFile ?? defaultExecFile;
   try {
-    const listen = await run("lsof", [
-      "-nP",
-      `-iTCP:${port}`,
-      "-sTCP:LISTEN",
-    ]);
+    const listen = await run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"]);
     const pid = parseListeningPid(listen.stdout);
     if (pid == null) return null;
 
@@ -85,7 +81,7 @@ export async function portBelongsToProject(
   opts: {
     execFile?: ExecFileFn;
     inspect?: (port: number) => Promise<PortOwner | null>;
-  } = {}
+  } = {},
 ): Promise<boolean> {
   const owner = opts.inspect
     ? await opts.inspect(port)
@@ -96,7 +92,7 @@ export async function portBelongsToProject(
 
 async function defaultExecFile(
   file: string,
-  args: readonly string[]
+  args: readonly string[],
 ): Promise<{ stdout: string; stderr: string }> {
   try {
     return await execFileAsync(file, [...args], {

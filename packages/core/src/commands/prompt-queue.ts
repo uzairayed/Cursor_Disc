@@ -1,8 +1,6 @@
 import type { QueuedPrompt } from "../channels/types.js";
 
-export type EnqueueResult =
-  | { ok: true; position: number }
-  | { ok: false; reason: "full" };
+export type EnqueueResult = { ok: true; position: number } | { ok: false; reason: "full" };
 
 export class PromptQueue {
   private readonly items: QueuedPrompt[] = [];

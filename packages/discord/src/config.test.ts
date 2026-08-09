@@ -26,7 +26,7 @@ describe("loadDiscordConfig", () => {
     const root = mkdtempSync(join(tmpdir(), "cdc-cfg-"));
     writeFileSync(
       join(root, ".env"),
-      "DISCORD_BOT_TOKEN=secret-token\nDISCORD_ALLOWED_USER_IDS=\n"
+      "DISCORD_BOT_TOKEN=secret-token\nDISCORD_ALLOWED_USER_IDS=\n",
     );
     delete process.env.DISCORD_BOT_TOKEN;
     delete process.env.DISCORD_ALLOWED_USER_IDS;
@@ -43,7 +43,7 @@ describe("loadDiscordConfig", () => {
         "DISCORD_ALLOWED_CHANNEL_IDS=333",
         "DISCORD_ALLOWED_GUILD_IDS=444",
         "APP_NAME=CursorDiscord",
-      ].join("\n")
+      ].join("\n"),
     );
     delete process.env.DISCORD_BOT_TOKEN;
     delete process.env.DISCORD_ALLOWED_USER_IDS;
@@ -57,5 +57,36 @@ describe("loadDiscordConfig", () => {
     expect(cfg.discordAllowedChannelIds).toEqual(["333"]);
     expect(cfg.discordAllowedGuildIds).toEqual(["444"]);
     expect(cfg.appName).toBe("CursorDiscord");
+    expect(cfg.bridgeLeaseChannelId).toBeNull();
+    expect(cfg.bridgeForce).toBe(false);
+    expect(cfg.bridgeLeaseStaleMs).toBe(90_000);
+    expect(cfg.bridgeHost.length).toBeGreaterThan(0);
+  });
+
+  it("reads bridge lease env overrides", () => {
+    const root = mkdtempSync(join(tmpdir(), "cdc-cfg-"));
+    writeFileSync(
+      join(root, ".env"),
+      [
+        "DISCORD_BOT_TOKEN=secret-token",
+        "DISCORD_ALLOWED_USER_IDS=111",
+        "BRIDGE_LEASE_CHANNEL_ID=999",
+        "BRIDGE_HOST=studio-pc",
+        "BRIDGE_LEASE_STALE_MS=120000",
+        "BRIDGE_FORCE=1",
+      ].join("\n"),
+    );
+    delete process.env.DISCORD_BOT_TOKEN;
+    delete process.env.DISCORD_ALLOWED_USER_IDS;
+    delete process.env.BRIDGE_LEASE_CHANNEL_ID;
+    delete process.env.BRIDGE_HOST;
+    delete process.env.BRIDGE_LEASE_STALE_MS;
+    delete process.env.BRIDGE_FORCE;
+
+    const cfg = loadDiscordConfig(root);
+    expect(cfg.bridgeLeaseChannelId).toBe("999");
+    expect(cfg.bridgeHost).toBe("studio-pc");
+    expect(cfg.bridgeLeaseStaleMs).toBe(120_000);
+    expect(cfg.bridgeForce).toBe(true);
   });
 });

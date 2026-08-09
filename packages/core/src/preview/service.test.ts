@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewService } from "./service.js";
 import { PreviewTunnelError } from "./tunnel.js";
 
+/** Args DevServerManager.ensure receives; the deps are cast, so state it here. */
+type EnsureOpts = { cwd: string; port: number };
+
 describe("PreviewService", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -13,10 +16,7 @@ describe("PreviewService", () => {
   it("does not reuse another project's listening port", async () => {
     const root = mkdtempSync(join(tmpdir(), "preview-svc-"));
     const projectsFile = join(root, "projects.json");
-    writeFileSync(
-      projectsFile,
-      JSON.stringify({ dirs: [], previewPorts: { motocards: 3000 } })
-    );
+    writeFileSync(projectsFile, JSON.stringify({ dirs: [], previewPorts: { motocards: 3000 } }));
 
     const ensure = vi.fn(async ({ port }: { port: number }) => ({
       ok: true as const,
@@ -39,7 +39,7 @@ describe("PreviewService", () => {
           ? projectPath.includes("tagiser")
           : port === 3001 && projectPath.includes("motocards"),
       devServers: {
-        ensure: async (opts) => {
+        ensure: async (opts: EnsureOpts) => {
           const result = await ensure(opts);
           up.add(opts.port);
           return result;
@@ -82,8 +82,7 @@ describe("PreviewService", () => {
     const svc = new PreviewService({
       projectsFile,
       probe: async () => true,
-      belongsToProject: async (_port, projectPath) =>
-        projectPath.includes("tagiser"),
+      belongsToProject: async (_port, projectPath) => projectPath.includes("tagiser"),
       devServers: { ensure, owns: () => false, stop: vi.fn(), stopAll: vi.fn() } as never,
       tunnelManager: { ensureTunnel, stopTunnel: vi.fn() } as never,
     });
@@ -126,7 +125,11 @@ describe("PreviewService", () => {
     writeFileSync(projectsFile, "{}");
     const projectPath = join(root, "tagiser");
 
-    const ensure = vi.fn(async () => ({ ok: true as const, started: true, port: 3000 }));
+    const ensure = vi.fn(async (_opts: EnsureOpts) => ({
+      ok: true as const,
+      started: true,
+      port: 3000,
+    }));
     const ensureTunnel = vi.fn(async () => ({
       port: 3000,
       url: "https://abc.trycloudflare.com",
@@ -139,7 +142,7 @@ describe("PreviewService", () => {
       probe: async () => up,
       belongsToProject: async () => up,
       devServers: {
-        ensure: async (opts) => {
+        ensure: async (opts: EnsureOpts) => {
           up = true;
           return ensure(opts);
         },

@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { CommandContext } from "./index.js";
 import type { AppConfig } from "../config/index.js";
 import { ProjectStore } from "../projects/index.js";
+import type { CommandContext } from "./index.js";
 import { handleUserMessage } from "./index.js";
 
 function setup(): ProjectStore {
@@ -20,7 +20,6 @@ function setup(): ProjectStore {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: "tagiser",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -33,20 +32,20 @@ function setup(): ProjectStore {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   } satisfies AppConfig);
 }
 
-function baseCtx(
-  projects: ProjectStore,
-  overrides: Partial<CommandContext> = {}
-): CommandContext {
+function baseCtx(projects: ProjectStore, overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     projects,
+    project: projects.resolve("tagiser")!,
     raw: "",
     getRunStatus: () => ({ busy: [], queuedCount: 0 }),
-    stopCurrent: () => false,
+    stopProject: () => false,
     stopAllRuns: () => {},
-    clearCurrentQueue: () => 0,
+    clearProjectQueue: () => 0,
     clearAllQueues: () => 0,
     ...overrides,
   };
@@ -68,7 +67,7 @@ describe("status intent", () => {
     const result = handleUserMessage({
       ...baseCtx(projects, {
         getRunStatus: () => ({
-          busy: [{ workspace: projects.getCurrent()!.path, projectKey: "tagiser" }],
+          busy: [{ workspace: projects.resolve("tagiser")!.path, projectKey: "tagiser" }],
           queuedCount: 0,
         }),
       }),

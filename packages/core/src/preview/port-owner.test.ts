@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isSameProjectPath,
-  parseListeningPid,
-  parseProcessCwd,
-} from "./port-owner.js";
+import { isSameProjectPath, parseListeningPid, parseProcessCwd } from "./port-owner.js";
 
 describe("parseListeningPid", () => {
   it("reads the PID from lsof LISTEN output", () => {
@@ -32,22 +28,16 @@ describe("parseProcessCwd", () => {
 describe("isSameProjectPath", () => {
   it("matches the project root and nested listener cwds", () => {
     expect(
-      isSameProjectPath(
-        "/Users/apple/projects/tagiser-beta",
-        "/Users/apple/projects/tagiser-beta"
-      )
+      isSameProjectPath("/Users/apple/projects/tagiser-beta", "/Users/apple/projects/tagiser-beta"),
     ).toBe(true);
     expect(
       isSameProjectPath(
         "/Users/apple/projects/tagiser-beta/.next",
-        "/Users/apple/projects/tagiser-beta"
-      )
+        "/Users/apple/projects/tagiser-beta",
+      ),
     ).toBe(true);
     expect(
-      isSameProjectPath(
-        "/Users/apple/p_projects/motocards",
-        "/Users/apple/projects/tagiser-beta"
-      )
+      isSameProjectPath("/Users/apple/p_projects/motocards", "/Users/apple/projects/tagiser-beta"),
     ).toBe(false);
   });
 });

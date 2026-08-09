@@ -4,7 +4,7 @@ import { resolveReplyDestination, threadNameForPrompt } from "./reply-destinatio
 
 describe("threadNameForPrompt", () => {
   it("truncates long prompts and strips newlines", () => {
-    const name = threadNameForPrompt("fix auth\nand more " + "x".repeat(120));
+    const name = threadNameForPrompt(`fix auth\nand more ${"x".repeat(120)}`);
     expect(name.length).toBeLessThanOrEqual(100);
     expect(name).not.toContain("\n");
     expect(name.startsWith("fix auth")).toBe(true);
@@ -70,7 +70,7 @@ describe("resolveReplyDestination", () => {
         isDMBased: () => false,
         send: vi.fn(),
       },
-      startThread: vi.fn(async () => thread),
+      startThread: vi.fn(async (_opts: { name: string }) => thread),
       reply: vi.fn(),
     };
 

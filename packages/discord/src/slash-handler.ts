@@ -1,26 +1,24 @@
 import {
-  MessageRouter,
-  parseProjectIntent,
   type DeliveryContext,
+  type MessageRouter,
   type PreviewService,
+  parseProjectIntent,
 } from "@cursor-bridge/core";
 import {
   ChannelType,
-  ThreadAutoArchiveDuration,
   type ChatInputCommandInteraction,
   type Message,
+  ThreadAutoArchiveDuration,
 } from "discord.js";
-import {
-  effectiveAllowedChannelIds,
-  isDiscordAuthorized,
-} from "./allowlist.js";
+import { effectiveAllowedChannelIds, isDiscordAuthorized } from "./allowlist.js";
+import type { BridgeLeaseManager } from "./bridge-lease.js";
 import type { DiscordConfig } from "./config.js";
 import { ensureGuildProjectChannel } from "./ensure-project-channel-discord.js";
 import { runPreviewSlashCommand } from "./preview-handler.js";
-import { ProjectChannelRegistry } from "./project-channels.js";
+import type { ProjectChannelRegistry } from "./project-channels.js";
 import { threadNameForPrompt } from "./reply-destination.js";
-import { createSlashDelivery } from "./slash-delivery.js";
 import { promptFromSlashCommand } from "./slash-commands.js";
+import { createSlashDelivery } from "./slash-delivery.js";
 import { handleVoiceSlashCommand } from "./voice/handler.js";
 import {
   buildGeneralModeBanner,
@@ -30,9 +28,7 @@ import {
   resolveWorkspaceContext,
 } from "./workspace-context.js";
 
-async function resolveInteractionContext(
-  interaction: ChatInputCommandInteraction
-): Promise<{
+async function resolveInteractionContext(interaction: ChatInputCommandInteraction): Promise<{
   userId: string;
   isBot: boolean;
   isDm: boolean;
@@ -68,9 +64,7 @@ async function resolveInteractionContext(
   };
 }
 
-async function unauthorizedReply(
-  interaction: ChatInputCommandInteraction
-): Promise<void> {
+async function unauthorizedReply(interaction: ChatInputCommandInteraction): Promise<void> {
   const content = "You're not authorized to use this bot here.";
   if (interaction.deferred || interaction.replied) {
     await interaction.followUp({ content, ephemeral: true });
@@ -85,13 +79,14 @@ export async function handleDiscordSlashCommand(opts: {
   router: MessageRouter;
   projectChannels: ProjectChannelRegistry;
   preview?: PreviewService;
+  lease?: BridgeLeaseManager;
 }): Promise<void> {
-  const { interaction, config, router, projectChannels, preview } = opts;
+  const { interaction, config, router, projectChannels, preview, lease } = opts;
   const ctx = await resolveInteractionContext(interaction);
 
   const allowedChannelIds = effectiveAllowedChannelIds(
     config.discordAllowedChannelIds,
-    projectChannels.channelIdsForGuild(ctx.guildId)
+    projectChannels.channelIdsForGuild(ctx.guildId),
   );
 
   if (
@@ -108,10 +103,26 @@ export async function handleDiscordSlashCommand(opts: {
       allowedGuildIds: config.discordAllowedGuildIds,
     })
   ) {
-    console.log(
-      `[discord] skip unauthorized slash /${interaction.commandName} user=${ctx.userId}`
-    );
+    console.log(`[discord] skip unauthorized slash /${interaction.commandName} user=${ctx.userId}`);
     await unauthorizedReply(interaction);
+    return;
+  }
+
+  if (interaction.commandName === "bridge") {
+    await handleBridgeSlashCommand({ interaction, lease });
+    return;
+  }
+
+  if (lease && !lease.isOwner()) {
+    const owner = lease.currentPayload()?.host ?? "another machine";
+    const content =
+      `This bridge is on standby (**${lease.host}**). Active owner: **${owner}**.\n` +
+      `Use \`/bridge take\` here to switch, or talk to the active machine.`;
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content, ephemeral: true });
+    } else {
+      await interaction.reply({ content, ephemeral: true });
+    }
     return;
   }
 
@@ -122,7 +133,6 @@ export async function handleDiscordSlashCommand(opts: {
     parentChannelId: ctx.parentChannelId,
     projectChannels,
   });
-  router.projects.setCurrent(workspace.projectKey);
 
   if (
     await handleVoiceSlashCommand({
@@ -148,16 +158,10 @@ export async function handleDiscordSlashCommand(opts: {
     }
     const project = router.projects.resolve(workspace.projectKey);
     console.log(
-      `← discord slash /${interaction.commandName} mode=${workspace.mode} project=${workspace.projectKey}`
+      `← discord slash /${interaction.commandName} mode=${workspace.mode} project=${workspace.projectKey}`,
     );
-    if (
-      interaction.commandName === "preview" ||
-      interaction.commandName === "preview_pick"
-    ) {
-      const pickNote =
-        interaction.commandName === "preview_pick"
-          ? " — element picker on"
-          : "";
+    if (interaction.commandName === "preview" || interaction.commandName === "preview_pick") {
+      const pickNote = interaction.commandName === "preview_pick" ? " — element picker on" : "";
       await interaction.editReply({
         content: `Checking localhost for **${workspace.projectKey.toUpperCase()}**${pickNote} (starting \`npm run dev\` if needed)…`,
       });
@@ -201,32 +205,35 @@ export async function handleDiscordSlashCommand(opts: {
       // ignore react failures on slash replies
     }
   };
-  let reactToMessage: ((messageId: string, emoji: string) => Promise<void>) | undefined =
-    async (messageId, emoji) => {
-      try {
-        const channel = interaction.channel;
-        if (!channel || !channel.isTextBased()) return;
-        const msg = await channel.messages.fetch(messageId);
-        await msg.react(emoji);
-      } catch {
-        // ignore
-      }
-    };
-  let editMessage: ((messageId: string, text: string) => Promise<void>) | undefined =
-    async (messageId, text) => {
-      try {
-        const channel = interaction.channel;
-        if (!channel || !channel.isTextBased()) return;
-        const msg = await channel.messages.fetch(messageId);
-        await msg.edit(text);
-      } catch {
-        // ignore
-      }
-    };
+  let reactToMessage: ((messageId: string, emoji: string) => Promise<void>) | undefined = async (
+    messageId,
+    emoji,
+  ) => {
+    try {
+      const channel = interaction.channel;
+      if (!channel?.isTextBased()) return;
+      const msg = await channel.messages.fetch(messageId);
+      await msg.react(emoji);
+    } catch {
+      // ignore
+    }
+  };
+  let editMessage: ((messageId: string, text: string) => Promise<void>) | undefined = async (
+    messageId,
+    text,
+  ) => {
+    try {
+      const channel = interaction.channel;
+      if (!channel?.isTextBased()) return;
+      const msg = await channel.messages.fetch(messageId);
+      await msg.edit(text);
+    } catch {
+      // ignore
+    }
+  };
 
   // Guild parent channel + /prompt|/ask → open a thread so the chat stays tidy.
-  const isPromptCommand =
-    interaction.commandName === "prompt" || interaction.commandName === "ask";
+  const isPromptCommand = interaction.commandName === "prompt" || interaction.commandName === "ask";
   if (
     !ctx.isDm &&
     !ctx.isThread &&
@@ -280,6 +287,7 @@ export async function handleDiscordSlashCommand(opts: {
     userId: ctx.userId,
     conversationId,
     surface: workspace.mode,
+    projectKey: workspace.projectKey,
     editReply,
     followUp,
     react,
@@ -300,12 +308,11 @@ export async function handleDiscordSlashCommand(opts: {
   }
 
   console.log(
-    `← discord slash /${interaction.commandName} mode=${workspace.mode} project=${workspace.projectKey} conversation=${delivery.conversationKey}: ${prompt.slice(0, 100)}`
+    `← discord slash /${interaction.commandName} mode=${workspace.mode} project=${workspace.projectKey} conversation=${delivery.conversationKey}: ${prompt.slice(0, 100)}`,
   );
 
-  const awaitingPick = router.projects.isAwaitingProjectPick();
   const intent = parseProjectIntent(prompt, router.projects, {
-    allowNumber: awaitingPick || workspace.mode === "general",
+    allowNumber: workspace.mode === "general",
   });
 
   if (intent?.action === "select") {
@@ -315,9 +322,7 @@ export async function handleDiscordSlashCommand(opts: {
     if (workspace.mode === "project") {
       if (intentKey === workspace.projectKey) {
         await delivery.reply(
-          delivery.formatOutput(
-            `You're already in **${workspace.projectKey.toUpperCase()}**.`
-          )
+          delivery.formatOutput(`You're already in **${workspace.projectKey.toUpperCase()}**.`),
         );
         return;
       }
@@ -331,22 +336,20 @@ export async function handleDiscordSlashCommand(opts: {
         });
         requestedChannelId = ensured.channelId;
       }
-      router.projects.setCurrent(workspace.projectKey);
       await delivery.reply(
         delivery.formatOutput(
           buildProjectLockedMessage({
             channelProjectKey: workspace.projectKey,
             requestedKey: intentKey,
             requestedChannelId,
-          })
-        )
+          }),
+        ),
       );
       return;
     }
 
     // General surface → redirect into the project channel.
     if (intentKey === "general") {
-      router.projects.setCurrent("general");
       if (guild) {
         const ensured = await ensureGuildProjectChannel({
           guild,
@@ -355,10 +358,8 @@ export async function handleDiscordSlashCommand(opts: {
         });
         await delivery.reply(
           delivery.formatOutput(
-            [buildGeneralModeBanner(), "", `Home channel: <#${ensured.channelId}>`].join(
-              "\n"
-            )
-          )
+            [buildGeneralModeBanner(), "", `Home channel: <#${ensured.channelId}>`].join("\n"),
+          ),
         );
       } else {
         await delivery.reply(delivery.formatOutput(buildGeneralModeBanner()));
@@ -369,8 +370,8 @@ export async function handleDiscordSlashCommand(opts: {
     if (!guild) {
       await delivery.reply(
         delivery.formatOutput(
-          `**${intentKey.toUpperCase()}** needs its server channel. Use \`/project name:${intentKey}\` in your server.`
-        )
+          `**${intentKey.toUpperCase()}** needs its server channel. Use \`/project name:${intentKey}\` in your server.`,
+        ),
       );
       return;
     }
@@ -380,15 +381,14 @@ export async function handleDiscordSlashCommand(opts: {
       projectKey: intentKey,
       registry: projectChannels,
     });
-    router.projects.setCurrent("general");
     await delivery.reply(
       delivery.formatOutput(
         buildProjectRedirectMessage({
           projectKey: intentKey,
           channelId: ensured.channelId,
           created: ensured.created,
-        })
-      )
+        }),
+      ),
     );
     return;
   }
@@ -402,9 +402,35 @@ export async function handleDiscordSlashCommand(opts: {
     return;
   }
 
-  router.projects.setCurrent(workspace.projectKey);
   await router.handle(prompt, delivery, {
     executionMode: interaction.commandName === "ask" ? "ask" : undefined,
     skipPlanFirst: interaction.commandName === "ask",
   });
+}
+
+async function handleBridgeSlashCommand(opts: {
+  interaction: ChatInputCommandInteraction;
+  lease?: BridgeLeaseManager;
+}): Promise<void> {
+  const { interaction, lease } = opts;
+  const sub = interaction.options.getSubcommand(false);
+  if (!lease) {
+    await interaction.reply({
+      content: "Bridge lease isn't available on this process.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (sub === "take") {
+    await interaction.deferReply({ ephemeral: true });
+    const result = await lease.take();
+    await interaction.editReply({ content: result.message.slice(0, 2000) });
+    return;
+  }
+
+  // status (default)
+  await interaction.deferReply({ ephemeral: true });
+  const status = await lease.status();
+  await interaction.editReply({ content: status.slice(0, 2000) });
 }

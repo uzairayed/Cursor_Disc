@@ -1,20 +1,21 @@
+import { Readable } from "node:stream";
 import {
-  VoiceSession,
+  type MessageRouter,
   synthesizeSpeech,
   transcribeVoicePcm,
-  type MessageRouter,
+  VoiceSession,
 } from "@cursor-bridge/core";
 import {
   AudioPlayerStatus,
-  EndBehaviorType,
-  StreamType,
-  VoiceConnectionStatus,
   createAudioPlayer,
   createAudioResource,
+  EndBehaviorType,
   entersState,
   getVoiceConnection,
   joinVoiceChannel,
+  StreamType,
   type VoiceConnection,
+  VoiceConnectionStatus,
 } from "@discordjs/voice";
 import type {
   ChatInputCommandInteraction,
@@ -22,7 +23,6 @@ import type {
   GuildMember,
   VoiceBasedChannel,
 } from "discord.js";
-import { Readable } from "node:stream";
 import prism from "prism-media";
 import type { DiscordConfig } from "../config.js";
 import { captureRouterReply } from "./capture-reply.js";
@@ -41,7 +41,7 @@ export class DiscordVoiceManager {
   constructor(
     private readonly config: DiscordConfig,
     private readonly router: MessageRouter,
-    private readonly client: Client
+    private readonly client: Client,
   ) {}
 
   statusText(): string {
@@ -127,7 +127,7 @@ export class DiscordVoiceManager {
     if (!this.textChannelId) return null;
     try {
       const ch = await this.client.channels.fetch(this.textChannelId);
-      if (ch && ch.isTextBased()) return ch;
+      if (ch?.isTextBased()) return ch;
     } catch {
       // ignore
     }
@@ -148,7 +148,7 @@ export class DiscordVoiceManager {
       },
       onHeard: async (transcript) => {
         const textChannel = await this.resolveTextChannel();
-        if (!textChannel || !textChannel.isSendable()) return;
+        if (!textChannel?.isSendable()) return;
         await textChannel.send({
           content: `🎤 Heard: ${transcript.slice(0, 1800)}`,
         });
@@ -273,7 +273,7 @@ let manager: DiscordVoiceManager | null = null;
 export function getOrCreateVoiceManager(
   config: DiscordConfig,
   router: MessageRouter,
-  client: Client
+  client: Client,
 ): DiscordVoiceManager {
   if (!manager) manager = new DiscordVoiceManager(config, router, client);
   return manager;

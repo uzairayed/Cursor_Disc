@@ -5,6 +5,7 @@ import { PromptQueue } from "./prompt-queue.js";
 function delivery(tag: string): DeliveryContext {
   return {
     platform: "discord",
+    projectKey: "crm",
     reply: vi.fn(async () => undefined),
     formatOutput: (t) => t,
     maxChars: 2000,

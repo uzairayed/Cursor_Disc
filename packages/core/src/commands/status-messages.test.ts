@@ -29,7 +29,7 @@ describe("status messages", () => {
       [
         { projectKey: "crm", depth: 1 },
         { projectKey: "alpha", depth: 2 },
-      ]
+      ],
     );
     expect(msg).toMatch(/2 agents running/i);
     expect(msg).toMatch(/Queued: \*CRM\* \(1\), \*ALPHA\* \(2\)/);

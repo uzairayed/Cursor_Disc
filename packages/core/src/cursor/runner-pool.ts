@@ -1,4 +1,9 @@
-import { CursorBusyError, CursorRunner, type CursorRunOptions, type CursorRunResult } from "./runner.js";
+import {
+  CursorBusyError,
+  CursorRunner,
+  type CursorRunOptions,
+  type CursorRunResult,
+} from "./runner.js";
 
 export interface BusyRun {
   workspace: string;
@@ -9,7 +14,7 @@ export class CursorRunnerPool {
   private readonly runners = new Map<string, CursorRunner>();
   private readonly active = new Map<string, BusyRun>();
 
-  constructor(private readonly maxConcurrent: number) {}
+  constructor(readonly maxConcurrent: number) {}
 
   getRunnerFor(workspace: string): CursorRunner {
     let runner = this.runners.get(workspace);

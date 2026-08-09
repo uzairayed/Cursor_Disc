@@ -7,8 +7,7 @@ import type { CursorExecutionMode } from "../cursor/runner.js";
 const NEEDS_LIVE =
   /\b(news|headline|headlines|traffic|weather|forecast|latest|today|tonight|breaking|search|look\s*up|google|stock|score|scores|price|prices|outage|blackout|protest|election|match|fixture)\b/i;
 
-const NEEDS_LIVE_UR =
-  /(خبر|اخبار|موسم|ٹریفک|تازہ|آج|ای میل)/;
+const NEEDS_LIVE_UR = /(خبر|اخبار|موسم|ٹریفک|تازہ|آج|ای میل)/;
 
 export function generalExecutionMode(prompt: string): CursorExecutionMode {
   const text = prompt.trim();

@@ -1,7 +1,4 @@
-import {
-  isPlanApprovalEmoji,
-  type MessageRouter,
-} from "@cursor-bridge/core";
+import { isPlanApprovalEmoji, type MessageRouter } from "@cursor-bridge/core";
 import type { MessageReaction, PartialMessageReaction, PartialUser, User } from "discord.js";
 
 /**

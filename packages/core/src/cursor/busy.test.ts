@@ -17,7 +17,7 @@ describe("CursorRunner busy state", () => {
           getChatId: () => null,
           setChatId: () => undefined,
         } as never,
-      })
+      }),
     ).rejects.toBeInstanceOf(CursorBusyError);
   });
 

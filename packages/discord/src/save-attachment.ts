@@ -1,20 +1,14 @@
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
+import { basename, join } from "node:path";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
 
-export type AttachmentKind = "image" | "audio" | "unsupported";
+export type AttachmentKind = "image" | "audio" | "document" | "unsupported";
 
-const IMAGE_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/jpg",
-  "image/gif",
-  "image/webp",
-]);
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]);
 const AUDIO_TYPES = new Set([
   "audio/ogg",
   "audio/mpeg",
@@ -25,8 +19,10 @@ const AUDIO_TYPES = new Set([
   "audio/mp4",
   "audio/m4a",
 ]);
+const DOC_TYPES = new Set(["application/pdf", "text/plain", "text/markdown", "text/csv"]);
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 const AUDIO_EXT = /\.(ogg|mp3|wav|webm|m4a|mp4|opus)$/i;
+const DOC_EXT = /\.(pdf|txt|md|csv)$/i;
 
 export function classifyAttachment(meta: {
   contentType?: string | null;
@@ -36,11 +32,12 @@ export function classifyAttachment(meta: {
   const name = meta.name ?? "";
   if (IMAGE_TYPES.has(type) || IMAGE_EXT.test(name)) return "image";
   if (AUDIO_TYPES.has(type) || AUDIO_EXT.test(name)) return "audio";
+  if (DOC_TYPES.has(type) || DOC_EXT.test(name)) return "document";
   return "unsupported";
 }
 
 export type AttachmentCheck =
-  | { ok: true; kind: "image" | "audio" }
+  | { ok: true; kind: "image" | "audio" | "document" }
   | { ok: false; reason: "too_large" | "unsupported" };
 
 export function isAllowedAttachment(meta: {
@@ -61,8 +58,12 @@ export async function saveDiscordAttachment(opts: {
   fetchImpl?: typeof fetch;
 }): Promise<string> {
   const fetchImpl = opts.fetchImpl ?? fetch;
+  const safeName = basename(opts.fileName);
+  if (safeName !== opts.fileName || safeName.includes("..")) {
+    throw new Error(`Unsafe attachment file name: ${opts.fileName}`);
+  }
   await mkdir(opts.destDir, { recursive: true });
-  const dest = join(opts.destDir, opts.fileName);
+  const dest = join(opts.destDir, safeName);
 
   const res = await fetchImpl(opts.url);
   if (!res.ok || !res.body) {

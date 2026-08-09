@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface ConversationMessage {
@@ -20,13 +14,31 @@ export interface ConversationState {
   updatedAt: string;
 }
 
+/**
+ * ponytail: maps a logical session key to a directory name safe on Windows
+ * (no `<>:"/\|?*`, control chars, trailing dots/spaces, or reserved names).
+ * Idempotent, so names read back from disk pass through unchanged. Ceiling:
+ * keys differing only in reserved chars (e.g. "a:b" vs "a/b") collide;
+ * upgrade path is a reversible escape encoding if that ever matters.
+ */
+export function toFsSafeKey(key: string): string {
+  let safe = "";
+  for (const ch of key.toLowerCase()) {
+    const code = ch.codePointAt(0) ?? 0;
+    safe += code < 32 || '<>:"/\\|?*'.includes(ch) ? "_" : ch;
+  }
+  safe = safe.replace(/[. ]+$/, "");
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(safe)) safe = `_${safe}`;
+  return safe;
+}
+
 export class ConversationManager {
   constructor(private readonly historyDir: string) {
     mkdirSync(historyDir, { recursive: true });
   }
 
   private dirFor(project: string): string {
-    return join(this.historyDir, project.toLowerCase());
+    return join(this.historyDir, toFsSafeKey(project));
   }
 
   private fileFor(project: string): string {
@@ -56,12 +68,12 @@ export class ConversationManager {
     project: string,
     userPrompt: string,
     assistantReply: string,
-    chatId?: string | null
+    chatId?: string | null,
   ): ConversationState {
     const state = this.load(project);
     state.messages.push(
       { role: "user", content: userPrompt, at: new Date().toISOString() },
-      { role: "assistant", content: assistantReply, at: new Date().toISOString() }
+      { role: "assistant", content: assistantReply, at: new Date().toISOString() },
     );
     if (chatId !== undefined) state.chatId = chatId;
     if (state.messages.length > 200) {
@@ -87,7 +99,7 @@ export class ConversationManager {
    * commands also reset thread sessions.
    */
   clearProjectSessions(projectKey: string): number {
-    const key = projectKey.toLowerCase();
+    const key = toFsSafeKey(projectKey);
     const prefix = `${key}__`;
     let cleared = 0;
     if (existsSync(this.historyDir)) {

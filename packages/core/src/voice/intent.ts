@@ -27,9 +27,7 @@ export function isEchoTranscript(raw: string): boolean {
 /** Soft barge-in while the bot is talking (half-duplex safe). */
 export function isInterruptIntent(raw: string): boolean {
   const text = raw.trim().toLowerCase().replace(/\s+/g, " ");
-  return /^(stop|stop all|cancel|shut up|quiet|enough|never ?mind|forget it)[.!]?$/.test(
-    text
-  );
+  return /^(stop|stop all|cancel|shut up|quiet|enough|never ?mind|forget it)[.!]?$/.test(text);
 }
 
 /** Fragments too short/incomplete to burn a Cursor agent turn. */
@@ -39,8 +37,7 @@ export function isTooThinForAgent(raw: string): boolean {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length <= 2 && text.length < 24) return true;
   // Cut off mid-thought — wait for coalesced follow-up instead
-  if (/\b(for|to|and|or|the|a|an|of|in|with|about|from)\.?\.\.?$/i.test(text))
-    return true;
+  if (/\b(for|to|and|or|the|a|an|of|in|with|about|from)\.?\.\.?$/i.test(text)) return true;
   if (/\b(for|to|and|or|with|about|from)$/i.test(text)) return true;
   if (text.endsWith("...") && words.length < 8) return true;
   return false;
