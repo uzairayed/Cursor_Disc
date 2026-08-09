@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BRIDGE_LEASE_MARKER,
+  type BridgeLeasePayload,
   decideClaim,
   formatLeaseMessage,
   formatLeaseStatus,
   isLeaseStale,
   parseBridgeLeaseMessage,
-  type BridgeLeasePayload,
 } from "./bridge-lease.js";
 
 function lease(overrides: Partial<BridgeLeasePayload> = {}): BridgeLeasePayload {

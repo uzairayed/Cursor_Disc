@@ -46,11 +46,7 @@ export function parseBridgeLeaseMessage(content: string): BridgeLeasePayload | n
   }
 }
 
-export function isLeaseStale(
-  lease: BridgeLeasePayload,
-  nowMs: number,
-  staleMs: number,
-): boolean {
+export function isLeaseStale(lease: BridgeLeasePayload, nowMs: number, staleMs: number): boolean {
   const hb = Date.parse(lease.heartbeatAt);
   if (!Number.isFinite(hb)) return true;
   return nowMs - hb > staleMs;
