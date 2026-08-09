@@ -1,4 +1,4 @@
-import { VadSegmenter, type VadOptions } from "../audio/vad.js";
+import { type VadOptions, VadSegmenter } from "../audio/vad.js";
 import {
   classifyVoiceIntent,
   isEchoTranscript,
@@ -21,10 +21,7 @@ export interface VoiceSessionDeps {
   stopSpeaking?: () => void | Promise<void>;
   transcribe: (audio: Buffer) => Promise<string>;
   handleCommand?: (text: string) => Promise<string | null | undefined>;
-  handleAgent?: (
-    text: string,
-    signal?: AbortSignal
-  ) => Promise<string | null | undefined>;
+  handleAgent?: (text: string, signal?: AbortSignal) => Promise<string | null | undefined>;
   /** Mirror what STT heard (Discord text channel). */
   onHeard?: (transcript: string) => Promise<void>;
   onText?: (text: string) => Promise<void>;
@@ -97,20 +94,22 @@ export class VoiceSession {
   }
 
   async say(text: string): Promise<void> {
-    await this.withTurn(async (signal) => {
-      for (const chunk of spokenChunksFromText(text)) {
-        if (signal.aborted) return;
-        await this.deps.speak(chunk);
-      }
-    }, { allowInterrupt: true });
+    await this.withTurn(
+      async (signal) => {
+        for (const chunk of spokenChunksFromText(text)) {
+          if (signal.aborted) return;
+          await this.deps.speak(chunk);
+        }
+      },
+      { allowInterrupt: true },
+    );
   }
 
   private vadFor(userId: string): VadLike {
     let vad = this.vads.get(userId);
     if (!vad) {
       vad =
-        this.deps.createVad?.() ??
-        new VadSegmenter(this.deps.vadOptions ?? { sampleRate: 48_000 });
+        this.deps.createVad?.() ?? new VadSegmenter(this.deps.vadOptions ?? { sampleRate: 48_000 });
       this.vads.set(userId, vad);
     }
     return vad;
@@ -137,7 +136,7 @@ export class VoiceSession {
 
   private async withTurn(
     fn: (signal: AbortSignal) => Promise<void>,
-    opts: { allowInterrupt: boolean }
+    opts: { allowInterrupt: boolean },
   ): Promise<void> {
     this.clearCoalesceTimer();
     this.pendingParts = [];
@@ -177,8 +176,7 @@ export class VoiceSession {
   private scheduleCoalesceFlush(): void {
     this.clearCoalesceTimer();
     const merged = this.pendingParts.join(" ").replace(/\s+/g, " ").trim();
-    const wait =
-      this.deps.coalesceMs ?? adaptiveCoalesceMs(merged);
+    const wait = this.deps.coalesceMs ?? adaptiveCoalesceMs(merged);
     if (wait <= 0) {
       void this.flushCoalesced().catch((err) => {
         console.error("[voice] coalesce flush failed:", err);
@@ -206,7 +204,7 @@ export class VoiceSession {
         async () => {
           await this.deps.speak("Sorry, I couldn't understand that.");
         },
-        { allowInterrupt: true }
+        { allowInterrupt: true },
       );
       return;
     }
@@ -268,7 +266,7 @@ export class VoiceSession {
             if (signal.aborted) return;
             await this.deps.speak(formatDateTime(this.deps.now?.() ?? new Date()));
           },
-          { allowInterrupt: true }
+          { allowInterrupt: true },
         );
         return;
       }
@@ -286,7 +284,7 @@ export class VoiceSession {
                 await this.deps.speak(chunk);
               }
             },
-            { allowInterrupt: true }
+            { allowInterrupt: true },
           );
         }
         return;
@@ -313,7 +311,7 @@ export class VoiceSession {
             await this.deps.speak(chunk);
           }
         },
-        { allowInterrupt: true }
+        { allowInterrupt: true },
       );
     } catch (err) {
       console.error("[voice] handle failed:", err);
@@ -321,7 +319,7 @@ export class VoiceSession {
         async () => {
           await this.deps.speak("Sorry, something went wrong.");
         },
-        { allowInterrupt: true }
+        { allowInterrupt: true },
       );
     } finally {
       this.dispatching = false;

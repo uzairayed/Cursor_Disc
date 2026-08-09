@@ -23,7 +23,7 @@ export function formatProgressHeader(elapsedSec: number, projectKey: string): st
 export function formatProgressMessage(
   elapsedSec: number,
   projectKey: string,
-  lastStep?: string | null
+  lastStep?: string | null,
 ): string {
   const lines = [formatProgressHeader(elapsedSec, projectKey)];
   const step = lastStep?.trim();
@@ -60,11 +60,7 @@ export function formatProgressBoard(opts: {
   return `${body.slice(0, maxChars - 1)}…`;
 }
 
-function boardLength(opts: {
-  projectKey: string;
-  elapsedSec: number;
-  steps: string[];
-}): number {
+function boardLength(opts: { projectKey: string; elapsedSec: number; steps: string[] }): number {
   return formatProgressBoard({ ...opts, maxChars: Number.MAX_SAFE_INTEGER }).length;
 }
 
@@ -77,7 +73,7 @@ export function createProgressBoard(
   delivery: DeliveryContext,
   opts: { projectKey: string; maxChars?: number } = {
     projectKey: "project",
-  }
+  },
 ): {
   attach: (messageId: string) => void;
   addStep: (stepLine: string) => Promise<void>;
@@ -279,9 +275,7 @@ export function formatToolCallProgress(toolCall: ToolCallBag): string | null {
     }
     if (toolKey.includes("grep") || toolKey.includes("rg") || toolKey === "search") {
       const pattern = typeof args.pattern === "string" ? args.pattern : null;
-      return pattern
-        ? `Search · \`${truncate(pattern, 36)}\``
-        : "Search · codebase";
+      return pattern ? `Search · \`${truncate(pattern, 36)}\`` : "Search · codebase";
     }
     if (toolKey.includes("glob")) {
       const glob =
@@ -424,4 +418,3 @@ export function createLiveProgressReporter(opts: {
     },
   };
 }
-

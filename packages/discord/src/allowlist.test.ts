@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  effectiveAllowedChannelIds,
-  isDiscordAuthorized,
-  parseIdList,
-} from "./allowlist.js";
+import { effectiveAllowedChannelIds, isDiscordAuthorized, parseIdList } from "./allowlist.js";
 
 describe("parseIdList", () => {
   it("parses comma-separated snowflakes", () => {
@@ -29,7 +25,7 @@ describe("isDiscordAuthorized", () => {
         channelId: "dm-1",
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(true);
   });
 
@@ -42,7 +38,7 @@ describe("isDiscordAuthorized", () => {
         channelId: "dm-1",
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(false);
   });
 
@@ -55,7 +51,7 @@ describe("isDiscordAuthorized", () => {
         channelId: "chan-1",
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(true);
   });
 
@@ -68,7 +64,7 @@ describe("isDiscordAuthorized", () => {
         channelId: "other-chan",
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(false);
   });
 
@@ -83,7 +79,7 @@ describe("isDiscordAuthorized", () => {
         isThread: true,
         allowedUserIds: users,
         allowedChannelIds: ["thread-99"],
-      })
+      }),
     ).toBe(true);
   });
 
@@ -98,7 +94,7 @@ describe("isDiscordAuthorized", () => {
         isThread: true,
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(true);
   });
 
@@ -113,7 +109,7 @@ describe("isDiscordAuthorized", () => {
         isThread: true,
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(false);
   });
 
@@ -126,7 +122,7 @@ describe("isDiscordAuthorized", () => {
         channelId: "dm-1",
         allowedUserIds: users,
         allowedChannelIds: channels,
-      })
+      }),
     ).toBe(false);
   });
 
@@ -141,7 +137,7 @@ describe("isDiscordAuthorized", () => {
         allowedUserIds: users,
         allowedChannelIds: channels,
         allowedGuildIds: ["guild-1"],
-      })
+      }),
     ).toBe(true);
   });
 
@@ -156,17 +152,13 @@ describe("isDiscordAuthorized", () => {
         allowedUserIds: users,
         allowedChannelIds: channels,
         allowedGuildIds: ["guild-1"],
-      })
+      }),
     ).toBe(false);
   });
 });
 
 describe("effectiveAllowedChannelIds", () => {
   it("merges and dedupes configured + project channels", () => {
-    expect(effectiveAllowedChannelIds(["a", "b"], ["b", "c"])).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
+    expect(effectiveAllowedChannelIds(["a", "b"], ["b", "c"])).toEqual(["a", "b", "c"]);
   });
 });

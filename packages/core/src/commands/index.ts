@@ -1,7 +1,7 @@
 import type { ConversationManager } from "../conversation/index.js";
 import type { BusyRun } from "../cursor/runner-pool.js";
 import { parsePlanApprovalIntent } from "../orchestration/plan-first.js";
-import type { ProjectStore } from "../projects/index.js";
+import type { ProjectStore, ResolvedProject } from "../projects/index.js";
 import {
   buildBusyStatusMessage,
   buildIdleStatusMessage,
@@ -15,12 +15,16 @@ export interface AgentRunStatus {
 }
 
 export interface CommandContext {
+  /** Only for listing the configured projects in help copy. */
   projects: ProjectStore;
+  /** Project this message belongs to, from the chat surface it arrived on. */
+  project: ResolvedProject;
   getRunStatus: () => AgentRunStatus;
-  stopCurrent: () => boolean;
+  /** Stop the run in `project`; false when it wasn't running. */
+  stopProject: () => boolean;
   stopAllRuns: () => void;
-  /** Clear the current project's prompt queue; returns how many items were dropped. */
-  clearCurrentQueue: () => number;
+  /** Clear `project`'s prompt queue; returns how many items were dropped. */
+  clearProjectQueue: () => number;
   /** Clear every directory queue; returns how many items were dropped. */
   clearAllQueues: () => number;
   raw: string;
@@ -55,49 +59,38 @@ function stripSlash(text: string): string {
 }
 
 export function buildGreetingMessage(
-  projects: ProjectStore,
-  opts: { surface?: "general" | "project" } = {}
+  opts: { surface?: "general" | "project"; projectKey?: string } = {},
 ): string {
-  const current = projects.getCurrent();
-  const surface = opts.surface;
-
-  if (surface === "general") {
+  if (opts.surface === "general") {
     return "Hey! Ask me anything, or say *projects* if you want to switch channels.";
   }
-  if (surface === "project" && current) {
-    return `Hey! You're in *${current.key.toUpperCase()}* — what do you need?`;
-  }
-  if (current) {
-    return `Hey! You're in *${current.key.toUpperCase()}* — what do you need?`;
+  if (opts.projectKey) {
+    return `Hey! You're in *${opts.projectKey.toUpperCase()}* — what do you need?`;
   }
   return "Hey! What can I help with? Say *projects* when you want to pick one.";
 }
 
 export function buildHelpMessage(
   projects: ProjectStore,
-  opts: { surface?: "general" | "project" } = {}
+  opts: { surface?: "general" | "project"; projectKey?: string } = {},
 ): string {
-  const current = projects.getCurrent();
-  const surface = opts.surface;
   const projectLine =
-    surface === "general"
+    opts.surface === "general"
       ? "You're in *GENERAL* — open questions land here; project work happens in that project's channel."
-      : surface === "project" && current
-        ? `You're locked to *${current.key.toUpperCase()}* in this channel.`
-        : current
-          ? `You're in *${current.key.toUpperCase()}* right now.`
-          : "You haven't picked a project yet.";
+      : opts.projectKey
+        ? `You're locked to *${opts.projectKey.toUpperCase()}* in this channel.`
+        : "You're in *GENERAL*.";
 
   return [
     "Hey — you can talk to Cursor right here.",
     "",
     projectLine,
     "",
-    surface === "general"
+    opts.surface === "general"
       ? "Ask anything general, or say *switch to <project>* and I'll send you to its channel."
       : "Just text me what you want done, or send a screenshot.",
     "",
-    "*Projects:* reply with a number or the name:",
+    "*Projects:* say *switch to <name>* (or reply with its number):",
     projects.formatPicker(),
     "",
     "You can also say things like:",
@@ -113,70 +106,22 @@ export function buildHelpMessage(
   ].join("\n");
 }
 
-function buildProjectPrompt(projects: ProjectStore, intro?: string): string {
+function buildProjectList(projects: ProjectStore, intro: string): string {
   return [
-    intro ?? "Which project should I use?",
+    intro,
     "",
     projects.formatPicker(),
     "",
-    "Reply with a number or the project name.",
+    "Say *switch to <name>*, or reply with a number, and I'll take you to its channel.",
   ].join("\n");
-}
-
-function tryPickProject(
-  projects: ProjectStore,
-  raw: string,
-  opts: { allowNumber: boolean }
-): CommandResult | null {
-  const text = normalize(raw);
-
-  if (opts.allowNumber && /^\d+$/.test(text)) {
-    const picked = projects.pickByNumber(Number(text));
-    if (!picked) {
-      return {
-        handled: true,
-        reply: `That number isn't on the list.\n\n${buildProjectPrompt(projects)}`,
-      };
-    }
-    return {
-      handled: true,
-      reply: `Got it — working in *${picked.key.toUpperCase()}* now.\n\nWhat do you need?`,
-    };
-  }
-
-  if (projects.resolve(text)) {
-    const set = projects.setCurrent(text)!;
-    return {
-      handled: true,
-      reply: `Got it — working in *${set.key.toUpperCase()}* now.\n\nWhat do you need?`,
-    };
-  }
-
-  const switchMatch = text.match(
-    /^(?:switch\s+to|use|go\s+to|open|project)\s+(.+)$/i
-  );
-  if (switchMatch?.[1]) {
-    const name = switchMatch[1].trim();
-    const set = projects.setCurrent(name);
-    if (!set) {
-      projects.setAwaitingProjectPick(true);
-      return {
-        handled: true,
-        reply: `I don't have a project called "${name}".\n\n${buildProjectPrompt(projects)}`,
-      };
-    }
-    return {
-      handled: true,
-      reply: `Switched to *${set.key.toUpperCase()}*.\n\nWhat do you need?`,
-    };
-  }
-
-  return null;
 }
 
 /**
  * Conversational message handler. Slash commands still work as shortcuts.
  * Returns passToAgent when the text should go to Cursor.
+ *
+ * Every branch acts on `ctx.project` — the project of the surface this message
+ * arrived on — so two channels can be handled concurrently without crosstalk.
  */
 export function handleUserMessage(ctx: CommandContext): CommandResult {
   const text = normalize(ctx.raw);
@@ -184,28 +129,12 @@ export function handleUserMessage(ctx: CommandContext): CommandResult {
 
   const body = stripSlash(text);
   const lower = body.toLowerCase();
-
-  // Awaiting a project choice (from help / picker / no-project prompt)
-  if (ctx.projects.isAwaitingProjectPick()) {
-    const picked = tryPickProject(ctx.projects, body, { allowNumber: true });
-    if (picked) return picked;
-
-    // Already in a project and this looks like a real prompt → drop out of pick mode
-    if (ctx.projects.getCurrent()) {
-      ctx.projects.setAwaitingProjectPick(false);
-    } else {
-      return {
-        handled: true,
-        reply: `Still need a project first.\n\n${buildProjectPrompt(ctx.projects)}`,
-      };
-    }
-  }
+  const project = ctx.project;
 
   // Cancel a waiting plan / large-prompt hold (approve/"go"/"plan" handled in router)
   const planIntent = parsePlanApprovalIntent(body);
   if (planIntent?.kind === "cancel") {
-    const current = ctx.projects.getCurrent();
-    if (!current || !ctx.projects.clearPendingForProject(current.key)) {
+    if (!ctx.projects.clearPendingForProject(project.key)) {
       return { handled: true, reply: "No plan waiting to cancel." };
     }
     return { handled: true, reply: "Cleared the pending plan." };
@@ -213,33 +142,22 @@ export function handleUserMessage(ctx: CommandContext): CommandResult {
 
   // New chat / start fresh — before greetings so "start fresh" isn't treated as help
   if (/^(new chat|start fresh|reset chat|clear chat|fresh chat)\b/i.test(lower)) {
-    const current = ctx.projects.getCurrent();
-    if (!current) {
-      ctx.projects.setAwaitingProjectPick(true);
-      return {
-        handled: true,
-        reply: buildProjectPrompt(ctx.projects, "Pick a project first, then we can start a new chat."),
-      };
-    }
     if (!ctx.conversations) {
       return {
         handled: true,
         reply: "I can't reset the chat right now — try again in a moment.",
       };
     }
-    const cleared = ctx.conversations.clearProjectSessions(current.key);
+    const cleared = ctx.conversations.clearProjectSessions(project.key);
     // Also clear the exact key for this surface (covers non-prefixed legacy).
-    ctx.conversations.setChatId(
-      sessionStorageKey(current.key, ctx.conversationKey),
-      null
-    );
-    ctx.projects.clearPendingForProject(current.key);
+    ctx.conversations.setChatId(sessionStorageKey(project.key, ctx.conversationKey), null);
+    ctx.projects.clearPendingForProject(project.key);
     return {
       handled: true,
       reply:
         cleared > 1
-          ? `Clean slate for *${current.key.toUpperCase()}* — cleared ${cleared} chat sessions. Next message starts fresh.`
-          : `Clean slate for *${current.key.toUpperCase()}* — next message starts a fresh Cursor chat.`,
+          ? `Clean slate for *${project.key.toUpperCase()}* — cleared ${cleared} chat sessions. Next message starts fresh.`
+          : `Clean slate for *${project.key.toUpperCase()}* — next message starts a fresh Cursor chat.`,
     };
   }
 
@@ -247,68 +165,51 @@ export function handleUserMessage(ctx: CommandContext): CommandResult {
   if (/^(hi|hello|hey|yo|sup)[!?.]*$/i.test(lower) || /^hey there[!?.]*$/i.test(lower)) {
     return {
       handled: true,
-      reply: buildGreetingMessage(ctx.projects, { surface: ctx.surface }),
+      reply: buildGreetingMessage({ surface: ctx.surface, projectKey: project.key }),
     };
   }
 
   // Help / menu ("start" alone — not "start fresh")
-  if (
-    /^(help|menu)$/i.test(lower) ||
-    /^what can you do\b/i.test(lower) ||
-    /^start$/i.test(lower)
-  ) {
-    ctx.projects.setAwaitingProjectPick(true);
+  if (/^(help|menu)$/i.test(lower) || /^what can you do\b/i.test(lower) || /^start$/i.test(lower)) {
     return {
       handled: true,
-      reply: buildHelpMessage(ctx.projects, { surface: ctx.surface }),
+      reply: buildHelpMessage(ctx.projects, {
+        surface: ctx.surface,
+        projectKey: project.key,
+      }),
     };
   }
 
-  // Show / change project picker
+  // Show the project list
   if (
     /^(projects|list projects|show projects|switch project|change project|choose project)\b/i.test(
-      lower
+      lower,
     )
   ) {
-    ctx.projects.setAwaitingProjectPick(true);
     return {
       handled: true,
-      reply: buildProjectPrompt(ctx.projects, "Sure — which project?"),
+      reply: buildProjectList(ctx.projects, "Sure — here's what I've got:"),
     };
   }
 
-  // Current project
+  // Which project is this surface bound to
   if (/^(current|where am i|which project|what project)/i.test(lower)) {
-    const current = ctx.projects.getCurrent();
-    if (!current) {
-      ctx.projects.setAwaitingProjectPick(true);
-      return {
-        handled: true,
-        reply: buildProjectPrompt(ctx.projects, "You haven't picked one yet."),
-      };
-    }
     return {
       handled: true,
-      reply: `You're in *${current.key.toUpperCase()}*\n${current.displayPath}`,
+      reply: `You're in *${project.key.toUpperCase()}*\n${project.displayPath}`,
     };
   }
 
   // Status / are you working
-  if (
-    /^(status|are you (still )?working|you there|still working)\??$/i.test(lower)
-  ) {
+  if (/^(status|are you (still )?working|you there|still working)\??$/i.test(lower)) {
     const status = ctx.getRunStatus();
     if (status.busy.length === 0 && status.queuedCount === 0) {
       return { handled: true, reply: buildIdleStatusMessage() };
     }
-    const current = ctx.projects.getCurrent();
-    if (status.busy.length === 1 && status.queuedCount === 0 && current) {
+    if (status.busy.length === 1 && status.queuedCount === 0) {
       const only = status.busy[0]!;
-      if (only.projectKey === current.key) {
-        return {
-          handled: true,
-          reply: buildBusyStatusMessage(current.key),
-        };
+      if (only.projectKey === project.key) {
+        return { handled: true, reply: buildBusyStatusMessage(project.key) };
       }
     }
     return {
@@ -317,7 +218,7 @@ export function handleUserMessage(ctx: CommandContext): CommandResult {
         status.busy,
         status.queueDepths && status.queueDepths.length > 0
           ? status.queueDepths
-          : status.queuedCount
+          : status.queuedCount,
       ),
     };
   }
@@ -345,67 +246,49 @@ export function handleUserMessage(ctx: CommandContext): CommandResult {
     return { handled: true, reply: "Nothing's running right now." };
   }
 
-  // Stop current project's run and queue
+  // Stop this project's run and queue
   if (/^(stop|cancel|never ?mind)\b/i.test(lower)) {
-    const current = ctx.projects.getCurrent();
-    if (!current) {
-      return { handled: true, reply: "Nothing's running right now." };
-    }
     const status = ctx.getRunStatus();
-    const currentBusy = status.busy.some((b) => b.workspace === current.path);
-    const cleared = ctx.clearCurrentQueue();
-    if (currentBusy) {
-      ctx.stopCurrent();
+    const projectBusy = status.busy.some((b) => b.workspace === project.path);
+    const cleared = ctx.clearProjectQueue();
+    if (projectBusy) {
+      ctx.stopProject();
       return {
         handled: true,
         reply:
           cleared > 0
-            ? `Okay, stopping *${current.key.toUpperCase()}* and clearing ${cleared} queued task${cleared === 1 ? "" : "s"}…`
+            ? `Okay, stopping *${project.key.toUpperCase()}* and clearing ${cleared} queued task${cleared === 1 ? "" : "s"}…`
             : "Okay, stopping that…",
       };
     }
     if (cleared > 0) {
       return {
         handled: true,
-        reply: `Cleared ${cleared} queued task${cleared === 1 ? "" : "s"} for *${current.key.toUpperCase()}*.`,
+        reply: `Cleared ${cleared} queued task${cleared === 1 ? "" : "s"} for *${project.key.toUpperCase()}*.`,
       };
     }
     // Bare "cancel" with a waiting plan/large-prompt — clear it (exact "cancel plan" handled above).
-    if (/^cancel\b/i.test(lower) && ctx.projects.clearPendingForProject(current.key)) {
+    if (/^cancel\b/i.test(lower) && ctx.projects.clearPendingForProject(project.key)) {
       return { handled: true, reply: "Cleared the pending plan." };
     }
     if (status.busy.length > 0) {
       const others = status.busy.map((b) => b.projectKey.toUpperCase()).join(", ");
       return {
         handled: true,
-        reply: `Nothing running in *${current.key.toUpperCase()}* — still working in ${others}. Say *stop all* to cancel everything.`,
+        reply: `Nothing running in *${project.key.toUpperCase()}* — still working in ${others}. Say *stop all* to cancel everything.`,
       };
     }
     return { handled: true, reply: "Nothing's running right now." };
   }
 
-  // Explicit project switch / bare name (numbers only via picker mode)
-  const picked = tryPickProject(ctx.projects, body, { allowNumber: false });
-  if (picked) return picked;
-
   // Unknown slash command
   if (text.startsWith("/")) {
-    ctx.projects.setAwaitingProjectPick(true);
     return {
       handled: true,
-      reply: `Hmm, I'm not sure what that means.\n\n${buildHelpMessage(ctx.projects)}`,
-    };
-  }
-
-  // No project selected → prompt to choose instead of running Cursor
-  if (!ctx.projects.getCurrent()) {
-    ctx.projects.setAwaitingProjectPick(true);
-    return {
-      handled: true,
-      reply: buildProjectPrompt(
-        ctx.projects,
-        "Quick one first — which project is this for?"
-      ),
+      reply: `Hmm, I'm not sure what that means.\n\n${buildHelpMessage(ctx.projects, {
+        surface: ctx.surface,
+        projectKey: project.key,
+      })}`,
     };
   }
 

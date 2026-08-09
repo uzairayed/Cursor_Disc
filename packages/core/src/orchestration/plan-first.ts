@@ -42,7 +42,7 @@ export function shouldPlanFirst(prompt: string): boolean {
   const text = prompt.trim();
   if (text.length >= PLAN_FIRST_CHAR_THRESHOLD) return true;
 
-  const numbered = text.match(/^\s*\d+[\.)]\s+\S/gm);
+  const numbered = text.match(/^\s*\d+[.)]\s+\S/gm);
   if (numbered && numbered.length >= 3) return true;
 
   if (
@@ -108,10 +108,7 @@ export function parsePlanApprovalIntent(text: string): PlanApprovalIntent | null
   return null;
 }
 
-export function buildImplementPrompt(pending: {
-  userPrompt: string;
-  planText: string;
-}): string {
+export function buildImplementPrompt(pending: { userPrompt: string; planText: string }): string {
   return [
     "Implement the approved plan below. Follow red → green → refactor.",
     "",

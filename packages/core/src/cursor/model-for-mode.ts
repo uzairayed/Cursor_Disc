@@ -9,7 +9,7 @@ export interface CursorModelConfig {
 /** Pick CLI --model for this execution mode; undefined means Cursor Auto. */
 export function modelForExecutionMode(
   config: CursorModelConfig,
-  mode: CursorExecutionMode
+  mode: CursorExecutionMode,
 ): string | undefined {
   if (mode === "plan") return config.cursorPlanModel ?? undefined;
   if (mode === "ask") {

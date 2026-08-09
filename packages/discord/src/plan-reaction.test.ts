@@ -9,7 +9,7 @@ describe("shouldApprovePlanFromReaction", () => {
         reactorIsBot: false,
         messageId: "plan-1",
         pendingApprovalMessageId: "plan-1",
-      })
+      }),
     ).toBe(true);
   });
 
@@ -20,7 +20,7 @@ describe("shouldApprovePlanFromReaction", () => {
         reactorIsBot: true,
         messageId: "plan-1",
         pendingApprovalMessageId: "plan-1",
-      })
+      }),
     ).toBe(false);
   });
 
@@ -31,7 +31,7 @@ describe("shouldApprovePlanFromReaction", () => {
         reactorIsBot: false,
         messageId: "plan-1",
         pendingApprovalMessageId: "plan-1",
-      })
+      }),
     ).toBe(false);
     expect(
       shouldApprovePlanFromReaction({
@@ -39,7 +39,7 @@ describe("shouldApprovePlanFromReaction", () => {
         reactorIsBot: false,
         messageId: "other",
         pendingApprovalMessageId: "plan-1",
-      })
+      }),
     ).toBe(false);
   });
 });

@@ -20,7 +20,7 @@ function stripSlash(text: string): string {
 export function parseProjectIntent(
   raw: string,
   projects: ProjectStore,
-  opts: { allowNumber?: boolean } = {}
+  opts: { allowNumber?: boolean } = {},
 ): ProjectIntent | null {
   const text = normalize(stripSlash(raw));
   if (!text) return null;
@@ -28,7 +28,7 @@ export function parseProjectIntent(
 
   if (
     /^(projects|list projects|show projects|switch project|change project|choose project)\b/i.test(
-      lower
+      lower,
     )
   ) {
     return { action: "list" };
@@ -47,9 +47,7 @@ export function parseProjectIntent(
     return null;
   }
 
-  const switchMatch = text.match(
-    /^(?:switch\s+to|use|go\s+to|open|project)\s+(.+)$/i
-  );
+  const switchMatch = text.match(/^(?:switch\s+to|use|go\s+to|open|project)\s+(.+)$/i);
   if (switchMatch?.[1]) {
     const name = switchMatch[1].trim();
     const resolved = projects.resolve(name);

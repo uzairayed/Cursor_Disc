@@ -23,7 +23,7 @@ export async function synthesizeSpeech(opts: {
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(
-      `TTS speech synthesis failed (${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`
+      `TTS speech synthesis failed (${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`,
     );
   }
 

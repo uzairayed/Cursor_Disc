@@ -1,6 +1,6 @@
 import { pcmToWav } from "./pcm-wav.js";
 import { transcribeRealtimePcm } from "./realtime-transcribe.js";
-import { VOICE_STT_PROMPT, transcribeAudio } from "./transcribe.js";
+import { transcribeAudio, VOICE_STT_PROMPT } from "./transcribe.js";
 
 export type VoiceSttMode = "realtime" | "batch";
 
@@ -27,7 +27,7 @@ export async function transcribeVoicePcm(opts: {
     } catch (err) {
       console.warn(
         "[voice] realtime STT failed, falling back to batch:",
-        err instanceof Error ? err.message : err
+        err instanceof Error ? err.message : err,
       );
     }
   }

@@ -42,12 +42,12 @@ describe("loadProjectsConfig", () => {
     expect(
       loadProjectsConfig({
         tagiser: "/Users/apple/projects/tagiser-beta",
-      })
+      }),
     ).toEqual({ tagiser: "/Users/apple/projects/tagiser-beta" });
   });
 
   it("merges scanned dirs with explicit aliases (aliases win on key clash)", () => {
-    const { root, a } = makeTree();
+    const { root } = makeTree();
     const custom = join(root, "custom-clip");
     mkdirSync(custom);
     const found = loadProjectsConfig({

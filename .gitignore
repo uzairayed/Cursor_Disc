@@ -10,6 +10,7 @@ history/
 state.json
 projects.json
 discord-project-channels.json
+.bridge.lock
 .secrets/
 
 # Remotion / motion / browser demo (local experiments + renders)

@@ -1,4 +1,4 @@
-import { PreviewService, type PreviewCommandResult } from "@cursor-bridge/core";
+import { type PreviewCommandResult, PreviewService } from "@cursor-bridge/core";
 import type { ChatInputCommandInteraction } from "discord.js";
 import type { DiscordConfig } from "./config.js";
 
@@ -20,9 +20,7 @@ export function parsePreviewTextCommand(raw: string): {
   const text = raw.trim().replace(/^\/+/, "");
   if (/^preview[_\s-]?stop\b/i.test(text)) return { action: "stop" };
 
-  const pickMatch = text.match(
-    /^preview[_\s-]?pick(?:\s+(\d{2,5}))?(?:\s+(\/\S*))?$/i
-  );
+  const pickMatch = text.match(/^preview[_\s-]?pick(?:\s+(\d{2,5}))?(?:\s+(\/\S*))?$/i);
   if (pickMatch) {
     const portRaw = pickMatch[1];
     const path = pickMatch[2];

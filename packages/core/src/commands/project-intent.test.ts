@@ -16,7 +16,7 @@ function store(): ProjectStore {
         crm: join(root, "crm"),
         fleet: join(root, "fleet"),
       },
-    })
+    }),
   );
   const config: AppConfig = {
     rootDir: root,
@@ -26,7 +26,6 @@ function store(): ProjectStore {
     stateFile: join(root, "state.json"),
     generalDir,
     cursorBin: "cursor",
-    defaultProject: null,
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -39,6 +38,8 @@ function store(): ProjectStore {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
   return new ProjectStore(config);
 }
@@ -65,9 +66,10 @@ describe("parseProjectIntent", () => {
     const projects = store();
     const keys = projects.list();
     const crmIndex = keys.indexOf("crm") + 1;
-    expect(
-      parseProjectIntent(String(crmIndex), projects, { allowNumber: true })
-    ).toEqual({ action: "select", key: "crm" });
+    expect(parseProjectIntent(String(crmIndex), projects, { allowNumber: true })).toEqual({
+      action: "select",
+      key: "crm",
+    });
     expect(parseProjectIntent(String(crmIndex), projects)).toBeNull();
   });
 

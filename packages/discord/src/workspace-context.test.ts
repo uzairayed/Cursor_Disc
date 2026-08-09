@@ -34,7 +34,7 @@ describe("resolveWorkspaceContext", () => {
         guildId: "g1",
         channelId: "chan-crm",
         projectChannels: reg,
-      })
+      }),
     ).toEqual({ mode: "project", projectKey: "crm", locked: true });
 
     expect(
@@ -44,7 +44,7 @@ describe("resolveWorkspaceContext", () => {
         channelId: "thread-1",
         parentChannelId: "chan-crm",
         projectChannels: reg,
-      }).projectKey
+      }).projectKey,
     ).toBe("crm");
   });
 
@@ -57,7 +57,7 @@ describe("resolveWorkspaceContext", () => {
         guildId: "g1",
         channelId: "chan-general",
         projectChannels: reg,
-      }).mode
+      }).mode,
     ).toBe("general");
     expect(
       resolveWorkspaceContext({
@@ -65,7 +65,7 @@ describe("resolveWorkspaceContext", () => {
         guildId: "g1",
         channelId: "lobby",
         projectChannels: reg,
-      }).mode
+      }).mode,
     ).toBe("general");
   });
 });
@@ -77,14 +77,14 @@ describe("UX copy", () => {
         projectKey: "crm",
         channelId: "111",
         created: true,
-      })
+      }),
     ).toMatch(/<#111>/);
     expect(
       buildProjectLockedMessage({
         channelProjectKey: "crm",
         requestedKey: "fleet",
         requestedChannelId: "222",
-      })
+      }),
     ).toMatch(/<#222>/);
   });
 });

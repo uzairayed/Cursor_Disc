@@ -1,5 +1,5 @@
-import type { Platform } from "./types.js";
 import { formatForDiscord } from "../utils/discord-format.js";
+import type { Platform } from "./types.js";
 
 export interface ChannelProfile {
   platform: Platform;

@@ -10,15 +10,13 @@ describe("summarizeShellCommand", () => {
   it("shortens absolute paths to basenames", () => {
     expect(
       summarizeShellCommand(
-        "node /Users/apple/.claude/skills/impeccable/scripts/serve-preview.js --port 57381"
-      )
+        "node /Users/apple/.claude/skills/impeccable/scripts/serve-preview.js --port 57381",
+      ),
     ).toMatch(/^node serve-preview\.js/);
   });
 
   it("keeps short npm commands readable", () => {
-    expect(summarizeShellCommand("npm test -- --run src/foo.test.ts")).toMatch(
-      /^npm test/
-    );
+    expect(summarizeShellCommand("npm test -- --run src/foo.test.ts")).toMatch(/^npm test/);
   });
 });
 
@@ -27,7 +25,7 @@ describe("formatToolCallProgress", () => {
     expect(
       formatToolCallProgress({
         readToolCall: { args: { path: "/tmp/proj/src/App.tsx" } },
-      })
+      }),
     ).toBe("Read · `App.tsx`");
   });
 
@@ -36,11 +34,10 @@ describe("formatToolCallProgress", () => {
       formatToolCallProgress({
         shellToolCall: {
           args: {
-            command:
-              "node /Users/apple/.claude/skills/impeccable/scripts/concept.js",
+            command: "node /Users/apple/.claude/skills/impeccable/scripts/concept.js",
           },
         },
-      })
+      }),
     ).toBe("Run · `node concept.js`");
   });
 
@@ -48,7 +45,7 @@ describe("formatToolCallProgress", () => {
     expect(
       formatToolCallProgress({
         editToolCall: { args: { path: "packages/ui/Button.tsx" } },
-      })
+      }),
     ).toBe("Edit · `Button.tsx`");
   });
 
@@ -56,7 +53,7 @@ describe("formatToolCallProgress", () => {
     expect(
       formatToolCallProgress({
         updateTodosToolCall: { args: {} },
-      })
+      }),
     ).toBe("Todos · updating");
   });
 });
@@ -109,8 +106,8 @@ describe("progressEventFromStreamLine", () => {
   it("ignores thinking deltas and completed tools", () => {
     expect(
       progressEventFromStreamLine(
-        JSON.stringify({ type: "thinking", subtype: "delta", text: "hmm" })
-      )
+        JSON.stringify({ type: "thinking", subtype: "delta", text: "hmm" }),
+      ),
     ).toBeNull();
     expect(
       progressEventFromStreamLine(
@@ -118,8 +115,8 @@ describe("progressEventFromStreamLine", () => {
           type: "tool_call",
           subtype: "completed",
           tool_call: { readToolCall: { args: { path: "x" } } },
-        })
-      )
+        }),
+      ),
     ).toBeNull();
   });
 });

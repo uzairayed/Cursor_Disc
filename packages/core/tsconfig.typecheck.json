@@ -1,0 +1,10 @@
+// Typecheck everything, tests included. Separate from tsconfig.json so `build`
+// keeps emitting only src into dist.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

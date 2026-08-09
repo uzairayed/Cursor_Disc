@@ -54,9 +54,7 @@ describe("RunLogger", () => {
       error: "boom",
     });
 
-    const lines = readFileSync(join(dir, "2026-07-29.jsonl"), "utf8")
-      .trim()
-      .split("\n");
+    const lines = readFileSync(join(dir, "2026-07-29.jsonl"), "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
     expect(JSON.parse(lines[1]!).error).toBe("boom");
   });

@@ -2,8 +2,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ProjectStore } from "../projects/index.js";
 import type { AppConfig } from "../config/index.js";
+import { ProjectStore } from "../projects/index.js";
 import type { CommandContext } from "./index.js";
 import { handleUserMessage } from "./index.js";
 
@@ -12,7 +12,7 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   const projectsFile = join(root, "projects.json");
   writeFileSync(
     projectsFile,
-    JSON.stringify({ crm: join(root, "crm"), fleet: join(root, "fleet") })
+    JSON.stringify({ crm: join(root, "crm"), fleet: join(root, "fleet") }),
   );
   return {
     rootDir: root,
@@ -22,7 +22,6 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: null,
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -35,32 +34,42 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
     ...overrides,
   };
 }
 
-function baseCtx(
-  projects: ProjectStore,
-  overrides: Partial<CommandContext> = {}
-): CommandContext {
+function baseCtx(projects: ProjectStore, overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     projects,
+    project: projects.resolve("crm")!,
     raw: "",
     getRunStatus: () => ({ busy: [], queuedCount: 0 }),
-    stopCurrent: () => false,
+    stopProject: () => false,
     stopAllRuns: () => {},
-    clearCurrentQueue: () => 0,
+    clearProjectQueue: () => 0,
     clearAllQueues: () => 0,
     ...overrides,
   };
 }
 
 describe("handleUserMessage", () => {
-  it("passes normal prompts to the agent when a project is set", () => {
-    const projects = new ProjectStore(testConfig({ defaultProject: "crm" }));
+  it("passes normal prompts to the agent for the surface's project", () => {
+    const projects = new ProjectStore(testConfig());
     const result = handleUserMessage({
       ...baseCtx(projects),
       raw: "Refactor auth",
+    });
+    expect(result.handled).toBe(false);
+    expect(result.passToAgent).toBe(true);
+  });
+
+  it("leaves project switching to the transport layer", () => {
+    const projects = new ProjectStore(testConfig());
+    const result = handleUserMessage({
+      ...baseCtx(projects),
+      raw: "switch to fleet",
     });
     expect(result.handled).toBe(false);
     expect(result.passToAgent).toBe(true);
@@ -86,40 +95,19 @@ describe("handleUserMessage", () => {
     expect(result.handled).toBe(true);
     expect(result.reply).toMatch(/hey/i);
     expect(result.reply).not.toMatch(/1\.\s*CRM/i);
-    expect(projects.isAwaitingProjectPick()).toBe(false);
   });
 
-  it("switches project by name", () => {
-    const projects = new ProjectStore(testConfig());
-    const result = handleUserMessage({
-      ...baseCtx(projects),
-      raw: "switch to crm",
-    });
-    expect(result.reply).toMatch(/CRM/i);
-    expect(projects.getCurrent()?.key).toBe("crm");
-  });
-
-  it("rejects unknown project names when switching", () => {
-    const projects = new ProjectStore(testConfig());
-    const result = handleUserMessage({
-      ...baseCtx(projects),
-      raw: "switch to missing",
-    });
-    expect(result.reply).toMatch(/don't have a project/i);
-    expect(result.reply).toMatch(/CRM/i);
-  });
-
-  it("stops the current project run with plain language", () => {
+  it("stops this surface's project run with plain language", () => {
     let stopped = false;
-    const projects = new ProjectStore(testConfig({ defaultProject: "crm" }));
-    const current = projects.getCurrent()!;
+    const projects = new ProjectStore(testConfig());
+    const current = projects.resolve("crm")!;
     const result = handleUserMessage({
       ...baseCtx(projects, {
         getRunStatus: () => ({
           busy: [{ workspace: current.path, projectKey: "crm" }],
           queuedCount: 0,
         }),
-        stopCurrent: () => {
+        stopProject: () => {
           stopped = true;
           return true;
         },
@@ -133,11 +121,11 @@ describe("handleUserMessage", () => {
   it("stop all clears every queue and stops all runs", () => {
     let stoppedAll = false;
     let cleared = false;
-    const projects = new ProjectStore(testConfig({ defaultProject: "crm" }));
+    const projects = new ProjectStore(testConfig());
     const result = handleUserMessage({
       ...baseCtx(projects, {
         getRunStatus: () => ({
-          busy: [{ workspace: projects.getCurrent()!.path, projectKey: "crm" }],
+          busy: [{ workspace: projects.resolve("crm")!.path, projectKey: "crm" }],
           queuedCount: 2,
         }),
         stopAllRuns: () => {

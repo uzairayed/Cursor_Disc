@@ -9,9 +9,12 @@ describe("createSlashDelivery", () => {
       userId: "u1",
       conversationId: "c1",
       surface: "project",
+      projectKey: "crm",
       editReply,
       followUp,
     });
+
+    expect(delivery.projectKey).toBe("crm");
 
     await delivery.reply("first");
     await delivery.reply("second");

@@ -24,8 +24,8 @@ describe("modelForExecutionMode", () => {
     expect(
       modelForExecutionMode(
         { cursorPlanModel: null, cursorAgentModel: null, cursorAskModel: null },
-        "agent"
-      )
+        "agent",
+      ),
     ).toBeUndefined();
   });
 });

@@ -1,6 +1,12 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { ConversationManager } from "../conversation/index.js";
+// Windows ships `cursor` as a .cmd shim, which Node refuses to spawn directly
+// (EINVAL) and mis-escapes under `shell: true` — the prompt is user supplied, so
+// that would be a command injection hole. cross-spawn resolves the shim and
+// quotes argv for cmd.exe correctly.
+import spawn from "cross-spawn";
+import type { ConversationManager } from "../conversation/index.js";
+import { killProcessTree } from "../utils/kill-tree.js";
 import { extractCursorText } from "./extract-text.js";
 import { progressEventFromStreamLine } from "./stream-progress.js";
 import type { TokenUsage } from "./types.js";
@@ -19,6 +25,12 @@ export interface CursorRunResult {
 }
 
 export type CursorExecutionMode = "agent" | "plan" | "ask";
+
+/** Retained stdout bounds: first 256 KB plus rolling last 4 MB. */
+export const STDOUT_HEAD_CAP = 256 * 1024;
+export const STDOUT_TAIL_CAP = 4 * 1024 * 1024;
+/** Retained stderr bound: rolling last 512 KB. */
+export const STDERR_CAP = 512 * 1024;
 
 export interface CursorRunOptions {
   cursorBin: string;
@@ -93,12 +105,12 @@ export class CursorRunner {
       // Idle at process level — pool.stop() still returns true when the slot is acquired.
       return false;
     }
-    this.child.kill("SIGTERM");
+    killProcessTree(this.child);
     const proc = this.child;
     setTimeout(() => {
       // proc.killed is true as soon as SIGTERM is *sent*, not when it exits.
       if (proc.exitCode === null && proc.signalCode === null) {
-        proc.kill("SIGKILL");
+        killProcessTree(proc, { force: true });
       }
     }, 3000);
     return true;
@@ -189,7 +201,13 @@ export class CursorRunner {
       if (this.stopRequested) {
         this.stop();
       }
-      let stdout = "";
+      // ponytail: bounded retention — stream-json for long runs can reach tens
+      // of MB. Keep the head (init/session lines) plus a rolling tail (result
+      // and recent assistant messages); the middle is dropped past the cap.
+      // Upgrade path: spool full output to a temp file if it's ever needed.
+      let stdoutHead = "";
+      let stdoutTail = "";
+      let stdoutLen = 0;
       let stderr = "";
       let lineBuf = "";
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -206,7 +224,11 @@ export class CursorRunner {
       };
 
       const consumeStdout = (chunk: string) => {
-        stdout += chunk;
+        stdoutLen += chunk.length;
+        if (stdoutHead.length < STDOUT_HEAD_CAP) {
+          stdoutHead = (stdoutHead + chunk).slice(0, STDOUT_HEAD_CAP);
+        }
+        stdoutTail = (stdoutTail + chunk).slice(-STDOUT_TAIL_CAP);
         if (!onProgress) return;
         lineBuf += chunk;
         let nl = lineBuf.indexOf("\n");
@@ -223,7 +245,7 @@ export class CursorRunner {
         consumeStdout(chunk.toString("utf8"));
       });
       child.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString("utf8");
+        stderr = (stderr + chunk.toString("utf8")).slice(-STDERR_CAP);
       });
 
       child.on("error", (err) => {
@@ -244,6 +266,7 @@ export class CursorRunner {
           if (event) onProgress(event.text);
         }
         const durationSec = Math.round((Date.now() - started) / 1000);
+        const stdout = stdoutLen <= STDOUT_HEAD_CAP ? stdoutHead : `${stdoutHead}\n${stdoutTail}`;
         const extracted = extractCursorText(stdout);
         const parsed = parseCursorJson(stdout);
         const sessionId = extracted.sessionId ?? parsed?.session_id ?? chatId;

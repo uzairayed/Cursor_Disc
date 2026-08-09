@@ -25,9 +25,7 @@ describe("classifyVoiceIntent", () => {
 
   it("flags thin / truncated agent prompts", () => {
     expect(isTooThinForAgent("you")).toBe(true);
-    expect(isTooThinForAgent("I was asking what is the latest news for...")).toBe(
-      true
-    );
+    expect(isTooThinForAgent("I was asking what is the latest news for...")).toBe(true);
     expect(isTooThinForAgent("what's the latest news for Kashmir")).toBe(false);
   });
 

@@ -31,9 +31,10 @@ describe("spokenChunksFromText", () => {
   });
 
   it("splits long answers into multiple speakable chunks", () => {
-    const sentences = Array.from({ length: 20 }, (_, i) => `Sentence number ${i + 1} is here.`).join(
-      " "
-    );
+    const sentences = Array.from(
+      { length: 20 },
+      (_, i) => `Sentence number ${i + 1} is here.`,
+    ).join(" ");
     const chunks = spokenChunksFromText(sentences, { chunkChars: 80, maxChars: 400 });
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.join(" ").length).toBeLessThanOrEqual(420);

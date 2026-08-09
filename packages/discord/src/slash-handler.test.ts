@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { MessageRouter } from "@cursor-bridge/core";
 import { ChannelType } from "discord.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DiscordConfig } from "./config.js";
@@ -21,7 +22,6 @@ function baseConfig(overrides: Partial<DiscordConfig> = {}): DiscordConfig {
     stateFile: "/tmp/state.json",
     generalDir: "/tmp/general",
     cursorBin: "cursor",
-    defaultProject: "general",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -34,23 +34,26 @@ function baseConfig(overrides: Partial<DiscordConfig> = {}): DiscordConfig {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
     discordBotToken: "token",
     discordAllowedUserIds: ["user-1"],
     discordAllowedChannelIds: ["chan-1", "parent-1"],
     discordAllowedGuildIds: [],
+    bridgeLeaseChannelId: null,
+    bridgeHost: "test-host",
+    bridgeLeaseStaleMs: 90_000,
+    bridgeForce: false,
     ...overrides,
   };
 }
 
 function mockProjects() {
   return {
-    getCurrent: vi.fn(() => ({ key: "general", path: "/tmp/general" })),
-    setCurrent: vi.fn((key: string) => ({ key, path: `/tmp/${key}` })),
-    isAwaitingProjectPick: vi.fn(() => false),
     resolve: vi.fn((name: string) => {
       const key = name.toLowerCase();
       if (["crm", "fleet", "general", "cliproom"].includes(key)) {
-        return { key, path: `/tmp/${key}` };
+        return { key, path: `/tmp/${key}`, displayPath: `/tmp/${key}` };
       }
       return null;
     }),
@@ -60,7 +63,7 @@ function mockProjects() {
 
 function mockRouter() {
   return {
-    handle: vi.fn(async () => undefined),
+    handle: vi.fn<MessageRouter["handle"]>(async () => undefined),
     projects: mockProjects(),
   };
 }
@@ -101,12 +104,10 @@ function mockInteraction(opts: {
   const followUps: Array<{ content: string; ephemeral?: boolean }> = [];
   const channelId = opts.channelId ?? "chan-1";
   const isThread =
-    opts.channelType === ChannelType.PublicThread ||
-    opts.channelType === ChannelType.PrivateThread;
+    opts.channelType === ChannelType.PublicThread || opts.channelType === ChannelType.PrivateThread;
   const isDm = opts.channelType === ChannelType.DM;
   const guildId = opts.guildId === undefined ? "g1" : opts.guildId;
-  const guild =
-    opts.withGuild === false || isDm || !guildId ? null : mockGuild(guildId);
+  const guild = opts.withGuild === false || isDm || !guildId ? null : mockGuild(guildId);
 
   const thread = {
     id: "thread-slash",
@@ -303,8 +304,12 @@ describe("handleDiscordSlashCommand", () => {
     expect(starter.startThread).not.toHaveBeenCalled();
     expect(router.handle).toHaveBeenCalledWith(
       "status",
-      expect.objectContaining({ platform: "discord", surface: "general" }),
-      { executionMode: undefined, skipPlanFirst: false }
+      expect.objectContaining({
+        platform: "discord",
+        surface: "general",
+        projectKey: "general",
+      }),
+      { executionMode: undefined, skipPlanFirst: false },
     );
   });
 
@@ -362,7 +367,7 @@ describe("handleDiscordSlashCommand", () => {
         port: 5173,
         path: "/app",
         pick: false,
-      })
+      }),
     );
     expect(edits.at(-1)).toContain("Preview ready");
     expect(router.handle).not.toHaveBeenCalled();
@@ -401,10 +406,7 @@ describe("handleDiscordSlashCommand", () => {
 
     expect(guild?.channels.create).toHaveBeenCalled();
     expect(router.handle).not.toHaveBeenCalled();
-    expect(edits.some((e) => /CRM/i.test(e) && /Continue there/i.test(e))).toBe(
-      true
-    );
-    expect(router.projects.setCurrent).toHaveBeenCalledWith("general");
+    expect(edits.some((e) => /CRM/i.test(e) && /Continue there/i.test(e))).toBe(true);
   });
 
   it("locks project switches when already in a project channel", async () => {
@@ -464,11 +466,14 @@ describe("handleDiscordSlashCommand", () => {
       projectChannels: reg,
     });
 
-    expect(router.projects.setCurrent).toHaveBeenCalledWith("fleet");
     expect(router.handle).toHaveBeenCalledWith(
       "help",
-      expect.objectContaining({ platform: "discord", surface: "project" }),
-      { executionMode: undefined, skipPlanFirst: false }
+      expect.objectContaining({
+        platform: "discord",
+        surface: "project",
+        projectKey: "fleet",
+      }),
+      { executionMode: undefined, skipPlanFirst: false },
     );
   });
 });

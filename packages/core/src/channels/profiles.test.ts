@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { discordProfile, profileFor } from "./profiles.js";
 import { splitMessage } from "../utils/split.js";
+import { discordProfile, profileFor } from "./profiles.js";
 
 describe("channel profiles", () => {
   it("exposes Discord 2000 char limit", () => {
@@ -23,9 +23,7 @@ describe("channel profiles", () => {
 
   it("splits at the Discord limit", () => {
     const long = "x".repeat(4500);
-    expect(splitMessage(long, discordProfile.maxChars).every((c) => c.length <= 2000)).toBe(
-      true
-    );
+    expect(splitMessage(long, discordProfile.maxChars).every((c) => c.length <= 2000)).toBe(true);
     expect(splitMessage(long, discordProfile.maxChars).length).toBeGreaterThan(1);
   });
 });

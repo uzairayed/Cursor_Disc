@@ -1,15 +1,12 @@
 import { ChannelType, type Guild, type GuildBasedChannel } from "discord.js";
 import {
-  ensureProjectChannel,
   type EnsureProjectChannelResult,
+  ensureProjectChannel,
   type ProjectChannelRegistry,
 } from "./project-channels.js";
 
 function isTextChannel(ch: GuildBasedChannel): boolean {
-  return (
-    ch.type === ChannelType.GuildText ||
-    ch.type === ChannelType.GuildAnnouncement
-  );
+  return ch.type === ChannelType.GuildText || ch.type === ChannelType.GuildAnnouncement;
 }
 
 /** Discord.js-backed ensure: create or adopt a #project channel in the guild. */

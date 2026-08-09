@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DeliveryContext } from "../channels/types.js";
 import { discordProfile } from "../channels/profiles.js";
-import type { AppConfig } from "../config/index.js";
+import type { DeliveryContext } from "../channels/types.js";
 import { MessageRouter } from "../commands/router.js";
+import type { AppConfig } from "../config/index.js";
 
 function setup(): {
   config: AppConfig;
@@ -24,7 +24,6 @@ function setup(): {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: "crm",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -37,6 +36,8 @@ function setup(): {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
   return { config, router: new MessageRouter(config), workspace };
 }
@@ -44,6 +45,7 @@ function setup(): {
 function delivery(replies: string[]): DeliveryContext {
   return {
     platform: "discord",
+    projectKey: "crm",
     reply: async (t) => {
       replies.push(t);
     },
@@ -68,7 +70,7 @@ describe("plan-first router flow", () => {
     expect(run).not.toHaveBeenCalled();
     expect(replies.join("\n")).toMatch(/plan/i);
     expect(replies.join("\n")).toMatch(/run/i);
-    expect(router.projects.getPendingLargePrompt()?.userPrompt).toBe(largePrompt);
+    expect(router.projects.getPendingLargePrompt("crm")?.userPrompt).toBe(largePrompt);
   });
 
   it("plan runs Cursor in plan mode and stores a pending plan", async () => {
@@ -109,9 +111,9 @@ describe("plan-first router flow", () => {
 
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]![0]!.executionMode).toBe("plan");
-    expect(router.projects.getPendingLargePrompt()).toBeNull();
-    expect(router.projects.getPendingPlan()?.planText).toMatch(/Do the thing/);
-    expect(router.projects.getPendingPlan()?.approvalMessageId).toBe(`plan-msg-${msgSeq}`);
+    expect(router.projects.getPendingLargePrompt("crm")).toBeNull();
+    expect(router.projects.getPendingPlan("crm")?.planText).toMatch(/Do the thing/);
+    expect(router.projects.getPendingPlan("crm")?.approvalMessageId).toBe(`plan-msg-${msgSeq}`);
     expect(reacted).toEqual([`plan-msg-${msgSeq}:✅`]);
     expect(replies.join("\n")).toMatch(/\*\*go\*\*|\*go\*/i);
     expect(replies.join("\n")).toContain("✅");
@@ -144,7 +146,7 @@ describe("plan-first router flow", () => {
 
     expect(run.mock.calls[0]![0]!.executionMode).toBe("agent");
     expect(run.mock.calls[0]![0]!.prompt).toMatch(/approved plan/i);
-    expect(router.projects.getPendingPlan()).toBeNull();
+    expect(router.projects.getPendingPlan("crm")).toBeNull();
   });
 
   it("go starts a fresh Cursor session (no resume of the plan chat)", async () => {
@@ -191,7 +193,7 @@ describe("plan-first router flow", () => {
     });
     const replies: string[] = [];
     await router.handle("cancel plan", delivery(replies));
-    expect(router.projects.getPendingLargePrompt()).toBeNull();
+    expect(router.projects.getPendingLargePrompt("crm")).toBeNull();
     expect(replies.join("\n")).toMatch(/cleared/i);
   });
 
@@ -208,7 +210,7 @@ describe("plan-first router flow", () => {
           delivery: d,
           projectKey: "crm",
           workspace,
-        }).ok
+        }).ok,
       ).toBe(true);
     }
 
@@ -220,7 +222,7 @@ describe("plan-first router flow", () => {
 
     await router.handle("plan", d);
     expect(replies.some((r) => /queue is full/i.test(r))).toBe(true);
-    expect(router.projects.getPendingLargePrompt()?.userPrompt).toBe(large);
+    expect(router.projects.getPendingLargePrompt("crm")?.userPrompt).toBe(large);
   });
 
   it("go on a large-prompt hold enters plan mode", async () => {
@@ -229,6 +231,7 @@ describe("plan-first router flow", () => {
     let msgSeq = 0;
     const d: DeliveryContext = {
       platform: "discord",
+      projectKey: "crm",
       reply: async (t) => {
         replies.push(t);
         msgSeq += 1;
@@ -262,8 +265,8 @@ describe("plan-first router flow", () => {
 
     await router.handle("go", d);
     expect(replies.some((r) => /no plan waiting/i.test(r))).toBe(false);
-    expect(router.projects.getPendingLargePrompt()).toBeNull();
-    expect(router.projects.getPendingPlan()?.planText).toMatch(/Do the thing/);
+    expect(router.projects.getPendingLargePrompt("crm")).toBeNull();
+    expect(router.projects.getPendingPlan("crm")?.planText).toMatch(/Do the thing/);
   });
 
   it("bare cancel clears a waiting plan", async () => {
@@ -275,7 +278,7 @@ describe("plan-first router flow", () => {
     });
     const replies: string[] = [];
     await router.handle("cancel", delivery(replies));
-    expect(router.projects.getPendingPlan()).toBeNull();
+    expect(router.projects.getPendingPlan("crm")).toBeNull();
     expect(replies.join("\n")).toMatch(/cleared/i);
   });
 });

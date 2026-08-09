@@ -1,4 +1,4 @@
-import { discordProfile, type DeliveryContext } from "@cursor-bridge/core";
+import { type DeliveryContext, discordProfile } from "@cursor-bridge/core";
 import type { Message } from "discord.js";
 
 /**
@@ -9,6 +9,7 @@ export function createSlashDelivery(opts: {
   userId: string;
   conversationId: string;
   surface: "general" | "project";
+  projectKey: string;
   editReply: (text: string) => Promise<unknown>;
   followUp: (text: string) => Promise<unknown>;
   react?: (emoji: string) => Promise<void>;
@@ -19,6 +20,7 @@ export function createSlashDelivery(opts: {
 
   return {
     platform: "discord",
+    projectKey: opts.projectKey,
     sourceId: `${opts.userId}:${opts.conversationId}`,
     conversationKey: `discord:${opts.conversationId}`,
     surface: opts.surface,
@@ -40,7 +42,12 @@ export function createSlashDelivery(opts: {
 }
 
 function messageIdFrom(sent: unknown): string | undefined {
-  if (sent && typeof sent === "object" && "id" in sent && typeof (sent as Message).id === "string") {
+  if (
+    sent &&
+    typeof sent === "object" &&
+    "id" in sent &&
+    typeof (sent as Message).id === "string"
+  ) {
     return (sent as Message).id;
   }
   return undefined;

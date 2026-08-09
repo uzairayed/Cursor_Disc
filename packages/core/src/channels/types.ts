@@ -4,6 +4,7 @@ export interface ReplyResult {
   messageId?: string;
 }
 
+// biome-ignore lint/suspicious/noConfusingVoidType: union with void lets reply implementations return nothing
 export type ReplyFn = (text: string) => Promise<ReplyResult | void>;
 export type ReactFn = (emoji: string) => Promise<void>;
 /** React on a previously sent bot message (e.g. ✅ on a plan reply). */
@@ -14,6 +15,12 @@ export type EditFn = (messageId: string, text: string) => Promise<void>;
 /** Transport-neutral delivery contract retained with every queued prompt. */
 export interface DeliveryContext {
   platform: Platform;
+  /**
+   * Project this message belongs to, decided by the chat surface it arrived on
+   * (Discord channel). Authoritative for the run: never read a shared "current
+   * project", because several projects can be mid-run at the same time.
+   */
+  projectKey: string;
   reply: ReplyFn;
   react?: ReactFn;
   reactToMessage?: ReactToMessageFn;

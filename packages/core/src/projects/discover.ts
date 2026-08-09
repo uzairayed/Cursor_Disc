@@ -25,10 +25,7 @@ function projectKey(folderName: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export function discoverProjectsFromDirs(
-  dirs: string[],
-  exclude: string[] = []
-): ProjectsMap {
+export function discoverProjectsFromDirs(dirs: string[], exclude: string[] = []): ProjectsMap {
   const excluded = new Set(exclude.map((e) => e.toLowerCase()));
   const found: ProjectsMap = {};
 
@@ -64,8 +61,7 @@ export function loadProjectsConfig(raw: unknown): ProjectsMap {
   if (!raw || typeof raw !== "object") return {};
 
   const obj = raw as Record<string, unknown>;
-  const hasScanShape =
-    Array.isArray(obj.dirs) || Array.isArray(obj.exclude) || obj.aliases != null;
+  const hasScanShape = Array.isArray(obj.dirs) || Array.isArray(obj.exclude) || obj.aliases != null;
 
   if (!hasScanShape) {
     // Legacy: { "name": "/path", ... }

@@ -49,7 +49,7 @@ export async function transcribeAudio(opts: TranscribeAudioOpts): Promise<string
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(
-      `Whisper transcription failed (${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`
+      `Whisper transcription failed (${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`,
     );
   }
 

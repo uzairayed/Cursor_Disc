@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,29 +7,27 @@ import { ProjectStore } from "../projects/index.js";
 import type { CommandContext } from "./index.js";
 import { handleUserMessage } from "./index.js";
 
-function baseCtx(
-  projects: ProjectStore,
-  overrides: Partial<CommandContext> = {}
-): CommandContext {
+function baseCtx(projects: ProjectStore, overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     projects,
+    project: projects.resolve("cliproom")!,
     raw: "",
     getRunStatus: () => ({ busy: [], queuedCount: 0 }),
-    stopCurrent: () => false,
+    stopProject: () => false,
     stopAllRuns: () => {},
-    clearCurrentQueue: () => 0,
+    clearProjectQueue: () => 0,
     clearAllQueues: () => 0,
     ...overrides,
   };
 }
 
-function setup(withProject = true): ProjectStore {
+function setup(): ProjectStore {
   const root = mkdtempSync(join(tmpdir(), "cwa-help-"));
   const workspace = join(root, "cliproom");
   mkdirSync(workspace);
   writeFileSync(
     join(root, "projects.json"),
-    JSON.stringify({ cliproom: workspace, tagiser: join(root, "tagiser") })
+    JSON.stringify({ cliproom: workspace, tagiser: join(root, "tagiser") }),
   );
   mkdirSync(join(root, "tagiser"));
   const config: AppConfig = {
@@ -40,7 +38,6 @@ function setup(withProject = true): ProjectStore {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: withProject ? "cliproom" : null,
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -53,13 +50,15 @@ function setup(withProject = true): ProjectStore {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
   return new ProjectStore(config);
 }
 
 describe("help", () => {
   it("sounds human and prompts a numbered project choice", () => {
-    const projects = setup(true);
+    const projects = setup();
     const result = handleUserMessage({
       ...baseCtx(projects),
       raw: "help",

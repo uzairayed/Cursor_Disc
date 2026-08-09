@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  formatReplyContext,
-  mergeReplyIntoPrompt,
-  resolveReplyContext,
-} from "./reply-context.js";
+import { formatReplyContext, mergeReplyIntoPrompt, resolveReplyContext } from "./reply-context.js";
 
 describe("formatReplyContext", () => {
   it("formats author + body", () => {
@@ -64,7 +60,7 @@ describe("mergeReplyIntoPrompt", () => {
   it("prepends reply context to the user prompt", () => {
     const merged = mergeReplyIntoPrompt(
       "summarize this",
-      "(Replying to a message from ali:)\n```\nDeploy failed\n```"
+      "(Replying to a message from ali:)\n```\nDeploy failed\n```",
     );
     expect(merged).toMatch(/Deploy failed/);
     expect(merged).toMatch(/summarize this/);
@@ -73,7 +69,7 @@ describe("mergeReplyIntoPrompt", () => {
   it("asks to read the quote when the user only tagged with no extra text", () => {
     const merged = mergeReplyIntoPrompt(
       null,
-      "(Replying to a message from ali:)\n```\nDeploy failed\n```"
+      "(Replying to a message from ali:)\n```\nDeploy failed\n```",
     );
     expect(merged).toMatch(/Deploy failed/);
     expect(merged).toMatch(/read the quoted message/i);

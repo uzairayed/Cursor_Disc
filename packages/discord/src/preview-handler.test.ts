@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import type { DiscordConfig } from "./config.js";
 import {
   createPreviewService,
   parsePreviewTextCommand,
   runPreviewSlashCommand,
 } from "./preview-handler.js";
-import type { DiscordConfig } from "./config.js";
 
 describe("parsePreviewTextCommand", () => {
   it("parses start / stop phrases", () => {
@@ -74,12 +74,8 @@ describe("runPreviewSlashCommand", () => {
     return {
       commandName: opts.commandName,
       options: {
-        getInteger: vi.fn((name: string) =>
-          name === "port" ? (opts.port ?? null) : null
-        ),
-        getString: vi.fn((name: string) =>
-          name === "path" ? (opts.path ?? null) : null
-        ),
+        getInteger: vi.fn((name: string) => (name === "port" ? (opts.port ?? null) : null)),
+        getString: vi.fn((name: string) => (name === "path" ? (opts.path ?? null) : null)),
       },
     };
   }
@@ -128,7 +124,7 @@ describe("runPreviewSlashCommand", () => {
     });
 
     expect(preview.start).toHaveBeenCalledWith(
-      expect.objectContaining({ pick: true, projectKey: "fleet" })
+      expect.objectContaining({ pick: true, projectKey: "fleet" }),
     );
   });
 

@@ -1,7 +1,4 @@
-import type {
-  DeliveryContext,
-  QueuedRunOptions,
-} from "../channels/types.js";
+import type { DeliveryContext, QueuedRunOptions } from "../channels/types.js";
 import type { AppConfig } from "../config/index.js";
 import { ConversationManager } from "../conversation/index.js";
 import type { CursorExecutionMode } from "../cursor/runner.js";
@@ -14,26 +11,22 @@ import {
   shouldPlanFirst,
   wrapPromptForPlan,
 } from "../orchestration/plan-first.js";
-import { ProjectStore } from "../projects/index.js";
+import { ProjectStore, type ResolvedProject } from "../projects/index.js";
 import { DirectoryQueues } from "./directory-queues.js";
 import { generalExecutionMode } from "./general-mode.js";
 import { handleUserMessage } from "./index.js";
-import {
-  MAX_CONCURRENT,
-  QUEUE_CAP,
-  RunLifecycle,
-  type RunTarget,
-} from "./run-lifecycle.js";
+import { QUEUE_CAP, RunLifecycle, type RunTarget } from "./run-lifecycle.js";
 
 export class MessageRouter {
   readonly projects: ProjectStore;
   readonly conversations: ConversationManager;
-  readonly runners = new CursorRunnerPool(MAX_CONCURRENT);
+  readonly runners: CursorRunnerPool;
   readonly queues = new DirectoryQueues(QUEUE_CAP);
   readonly logger: RunLogger;
   private readonly lifecycle: RunLifecycle;
 
-  constructor(private readonly config: AppConfig) {
+  constructor(config: AppConfig) {
+    this.runners = new CursorRunnerPool(config.cursorMaxConcurrent);
     this.projects = new ProjectStore(config);
     this.conversations = new ConversationManager(config.historyDir);
     this.logger = new RunLogger(config.logsDir);
@@ -43,7 +36,7 @@ export class MessageRouter {
       this.conversations,
       this.runners,
       this.queues,
-      this.logger
+      this.logger,
     );
   }
 
@@ -54,10 +47,22 @@ export class MessageRouter {
       /** Force Cursor CLI mode (e.g. Discord /ask → read-only ask). */
       executionMode?: CursorExecutionMode;
       skipPlanFirst?: boolean;
-    } = {}
+    } = {},
   ): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    // The surface decides the project; nothing here reads a shared current.
+    const project = this.projects.resolve(delivery.projectKey);
+    if (!project) {
+      await delivery.reply(
+        delivery.formatOutput(
+          `I don't have a project called "${delivery.projectKey}" any more — check projects.json.\n\n${this.projects.formatPicker()}`,
+        ),
+      );
+      return;
+    }
+    const target: RunTarget = { projectKey: project.key, workspace: project.path };
 
     // General: ask for chat; agent when live search is needed (ask blocks web).
     if (!opts.executionMode && delivery.surface === "general") {
@@ -70,21 +75,7 @@ export class MessageRouter {
 
     // Slash /ask (and similar) — skip plan-gate and run read-only ask mode.
     if (opts.executionMode === "ask") {
-      const current = this.projects.getCurrent();
-      if (!current) {
-        this.projects.setAwaitingProjectPick(true);
-        await delivery.reply(
-          delivery.formatOutput(
-            `Quick one first — which project is this for?\n\n${this.projects.formatPicker()}\n\nReply with a number or the project name.`
-          )
-        );
-        return;
-      }
-      const target = this.toRunTarget(current);
-      const runOpts: QueuedRunOptions = {
-        skipPlanFirst: true,
-        executionMode: "ask",
-      };
+      const runOpts: QueuedRunOptions = { skipPlanFirst: true, executionMode: "ask" };
       const queued = await this.lifecycle.tryQueue(trimmed, delivery, target, runOpts);
       if (queued !== "idle") return;
       await this.lifecycle.runPrompt(trimmed, delivery, target, runOpts);
@@ -94,34 +85,30 @@ export class MessageRouter {
     const planIntent = parsePlanApprovalIntent(trimmed);
 
     if (planIntent?.kind === "enter_plan") {
-      await this.consumePendingLargePrompt(delivery, "plan");
+      await this.consumePendingLargePrompt(delivery, project, "plan");
       return;
     }
 
     if (planIntent?.kind === "run_anyway") {
-      await this.consumePendingLargePrompt(delivery, "run");
+      await this.consumePendingLargePrompt(delivery, project, "run");
       return;
     }
 
     if (planIntent?.kind === "approve") {
-      const pendingPlan = this.projects.getPendingPlan();
+      const pendingPlan = this.projects.getPendingPlan(project.key);
       if (!pendingPlan) {
         // *go* while a large prompt is waiting → enter plan mode (recommended path).
-        const large = this.projects.getPendingLargePrompt();
-        if (large) {
-          await this.consumePendingLargePrompt(delivery, "plan");
+        if (this.projects.getPendingLargePrompt(project.key)) {
+          await this.consumePendingLargePrompt(delivery, project, "plan");
           return;
         }
         await delivery.reply(
           delivery.formatOutput(
-            "No plan waiting — send a task first (big ones ask you to enter plan mode)."
-          )
+            "No plan waiting — send a task first (big ones ask you to enter plan mode).",
+          ),
         );
         return;
       }
-      if (!(await this.ensureProjectMatches(pendingPlan.projectKey, delivery))) return;
-      const target = this.projectTarget(pendingPlan.projectKey);
-      if (!target) return;
 
       const implementBody = buildImplementPrompt(pendingPlan);
       const runOpts: QueuedRunOptions = {
@@ -133,7 +120,7 @@ export class MessageRouter {
       };
       const queued = await this.lifecycle.tryQueue(implementBody, delivery, target, runOpts);
       if (queued === "full") return;
-      this.projects.setPendingPlan(null, pendingPlan.projectKey);
+      this.projects.clearPendingForProject(project.key);
       if (queued === "queued") return;
       await this.lifecycle.runPrompt(implementBody, delivery, target, runOpts);
       return;
@@ -141,20 +128,13 @@ export class MessageRouter {
 
     const command = handleUserMessage({
       projects: this.projects,
+      project,
       getRunStatus: () => this.getRunStatus(),
-      stopCurrent: () => {
-        const current = this.projects.getCurrent();
-        if (!current) return false;
-        return this.runners.stop(current.path);
-      },
+      stopProject: () => this.runners.stop(project.path),
       stopAllRuns: () => {
         this.runners.stopAll();
       },
-      clearCurrentQueue: () => {
-        const current = this.projects.getCurrent();
-        if (!current) return 0;
-        return this.queues.clear(current.path);
-      },
+      clearProjectQueue: () => this.queues.clear(project.path),
       clearAllQueues: () => this.queues.clearAll(),
       raw: trimmed,
       conversations: this.conversations,
@@ -169,25 +149,13 @@ export class MessageRouter {
       return;
     }
 
-    const current = this.projects.getCurrent();
-    if (!current) {
-      this.projects.setAwaitingProjectPick(true);
-      await delivery.reply(
-        delivery.formatOutput(
-          `Quick one first — which project is this for?\n\n${this.projects.formatPicker()}\n\nReply with a number or the project name.`
-        )
-      );
-      return;
-    }
-
-    const target = this.toRunTarget(current);
     const queued = await this.lifecycle.tryQueue(trimmed, delivery, target);
     if (queued !== "idle") return;
 
     // Big prompt → ask user to enter plan mode (don't auto-run).
     if (!opts.skipPlanFirst && shouldPlanFirst(trimmed)) {
       this.projects.setPendingLargePrompt({
-        projectKey: current.key,
+        projectKey: project.key,
         userPrompt: trimmed,
         conversationKey: delivery.conversationKey,
       });
@@ -204,22 +172,21 @@ export class MessageRouter {
   /** Admit a held large prompt as plan-mode or agent run; keep hold if queue is full. */
   private async consumePendingLargePrompt(
     delivery: DeliveryContext,
-    mode: "plan" | "run"
+    project: ResolvedProject,
+    mode: "plan" | "run",
   ): Promise<void> {
-    const pending = this.projects.getPendingLargePrompt();
+    const pending = this.projects.getPendingLargePrompt(project.key);
     if (!pending) {
       await delivery.reply(
         delivery.formatOutput(
           mode === "plan"
             ? "Nothing waiting for plan mode — send a task first. Big prompts get this prompt automatically."
-            : "Nothing waiting to run — send a task first."
-        )
+            : "Nothing waiting to run — send a task first.",
+        ),
       );
       return;
     }
-    if (!(await this.ensureProjectMatches(pending.projectKey, delivery))) return;
-    const target = this.projectTarget(pending.projectKey);
-    if (!target) return;
+    const target: RunTarget = { projectKey: project.key, workspace: project.path };
 
     const userPrompt = pending.userPrompt;
     const runOpts: QueuedRunOptions =
@@ -234,66 +201,25 @@ export class MessageRouter {
 
     const queued = await this.lifecycle.tryQueue(userPrompt, delivery, target, runOpts);
     if (queued === "full") return;
-    this.projects.setPendingLargePrompt(null, pending.projectKey);
+    this.projects.clearPendingForProject(project.key);
     if (queued === "queued") return;
     await this.lifecycle.runPrompt(userPrompt, delivery, target, runOpts);
   }
 
-  private toRunTarget(project: { key: string; path: string }): RunTarget {
-    return { projectKey: project.key, workspace: project.path };
-  }
-
   private getRunStatus() {
+    const busy = this.runners.listBusy();
     return {
-      busy: this.runners.listBusy(),
+      busy,
       queuedCount: this.queues.totalSize(),
       queueDepths: this.queues.queueDepths().map((q) => {
-        const busy = this.runners.listBusy().find((b) => b.workspace === q.workspace);
+        const running = busy.find((b) => b.workspace === q.workspace);
         return {
-          projectKey: busy?.projectKey ?? this.projectKeyForWorkspace(q.workspace),
+          projectKey:
+            running?.projectKey ?? this.projects.keyForWorkspace(q.workspace) ?? q.workspace,
           workspace: q.workspace,
           depth: q.depth,
         };
       }),
     };
-  }
-
-  private projectKeyForWorkspace(workspace: string): string {
-    for (const key of this.projects.list()) {
-      const resolved = this.projects.resolve(key);
-      if (resolved?.path === workspace) return resolved.key;
-    }
-    return workspace;
-  }
-
-  private projectTarget(projectKey: string): RunTarget | null {
-    const resolved = this.projects.resolve(projectKey);
-    if (!resolved) return null;
-    return { projectKey: resolved.key, workspace: resolved.path };
-  }
-
-  private async ensureProjectMatches(
-    projectKey: string,
-    delivery: DeliveryContext
-  ): Promise<boolean> {
-    const current = this.projects.getCurrent();
-    if (!current) {
-      this.projects.setAwaitingProjectPick(true);
-      await delivery.reply(
-        delivery.formatOutput(
-          `Quick one first — which project is this for?\n\n${this.projects.formatPicker()}\n\nReply with a number or the project name.`
-        )
-      );
-      return false;
-    }
-    if (projectKey !== current.key) {
-      await delivery.reply(
-        delivery.formatOutput(
-          `That was for *${projectKey.toUpperCase()}*. Switch back there, or say *cancel plan*.`
-        )
-      );
-      return false;
-    }
-    return true;
   }
 }

@@ -43,7 +43,7 @@ export function isDiscordAuthorized(input: DiscordAuthInput): boolean {
 /** Merge static allowlist with auto-created project channels for a guild. */
 export function effectiveAllowedChannelIds(
   configured: readonly string[],
-  projectChannelIds: readonly string[]
+  projectChannelIds: readonly string[],
 ): string[] {
   return [...new Set([...configured, ...projectChannelIds])];
 }
@@ -53,7 +53,7 @@ export function assertDiscordAllowlistConfigured(allowedUserIds: string[]): void
   if (allowedUserIds.length === 0) {
     throw new Error(
       "DISCORD_ALLOWED_USER_IDS is empty — refusing to start. " +
-        "Set at least one owner Discord user ID so arbitrary senders cannot drive Cursor."
+        "Set at least one owner Discord user ID so arbitrary senders cannot drive Cursor.",
     );
   }
 }

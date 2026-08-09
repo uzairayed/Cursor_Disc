@@ -31,8 +31,7 @@ describe("extractCursorText", () => {
   });
 
   it("prefers the longest assistant message when the result is a short stub", () => {
-    const longAssistant =
-      "Here is the full analysis of the login bug. ".repeat(10).trim();
+    const longAssistant = "Here is the full analysis of the login bug. ".repeat(10).trim();
     const stdout = [
       JSON.stringify({
         type: "assistant",

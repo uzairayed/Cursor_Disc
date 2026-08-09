@@ -1,11 +1,12 @@
 import { join } from "node:path";
-import { MessageRouter, purgeOldFiles } from "@cursor-bridge/core";
+import { acquireProcessLock, MessageRouter, purgeOldFiles } from "@cursor-bridge/core";
 import { startDiscordBridge } from "./client.js";
 import { loadDiscordConfig } from "./config.js";
 import { createPreviewService } from "./preview-handler.js";
 
 async function main(): Promise<void> {
   const config = loadDiscordConfig();
+  const lock = acquireProcessLock(join(config.rootDir, ".bridge.lock"));
   const purged = purgeOldFiles({
     dirs: [join(config.historyDir, "inbox"), config.logsDir],
     retentionDays: config.retentionDays,
@@ -26,16 +27,39 @@ async function main(): Promise<void> {
   } else {
     console.log("Channel allowlist: (empty — DMs only)");
   }
+  if (config.bridgeLeaseChannelId) {
+    console.log(
+      `Bridge lease channel: ${config.bridgeLeaseChannelId} (host ${config.bridgeHost}${config.bridgeForce ? ", FORCE" : ""})`,
+    );
+  } else {
+    console.log("Bridge lease: disabled (set BRIDGE_LEASE_CHANNEL_ID for Mac/PC switching)");
+  }
   console.log("Starting Discord…");
 
   const router = new MessageRouter(config);
   const preview = createPreviewService(config);
-  const shutdownPreviews = () => {
-    void preview.stopAll();
+  // Installing a signal listener removes Node's default terminate, so this has
+  // to exit explicitly — otherwise Ctrl+C just runs cleanup and the bridge
+  // keeps serving. Agents are stopped too: a `--force` run that outlives the
+  // bridge would keep editing files with nobody watching.
+  let leaseRelease: (() => Promise<void>) | null = null;
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n${signal} received — stopping agents and preview tunnels…`);
+    router.runners.stopAll();
+    lock.release();
+    void Promise.resolve(leaseRelease?.())
+      .catch((err) => console.error("Bridge lease release failed:", err))
+      .then(() => preview.stopAll())
+      .catch((err) => console.error("Preview cleanup failed:", err))
+      .finally(() => process.exit(0));
   };
-  process.once("SIGINT", shutdownPreviews);
-  process.once("SIGTERM", shutdownPreviews);
-  await startDiscordBridge(config, router, undefined, preview);
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  const { lease } = await startDiscordBridge(config, router, undefined, preview);
+  leaseRelease = () => lease.release();
 }
 
 process.on("unhandledRejection", (reason) => {

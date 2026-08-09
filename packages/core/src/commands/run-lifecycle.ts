@@ -1,28 +1,24 @@
-import type {
-  DeliveryContext,
-  QueuedPrompt,
-  QueuedRunOptions,
-} from "../channels/types.js";
+import type { DeliveryContext, QueuedPrompt, QueuedRunOptions } from "../channels/types.js";
 import type { AppConfig } from "../config/index.js";
-import { ConversationManager } from "../conversation/index.js";
-import {
-  CursorBusyError,
-  CursorNotFoundError,
-  type CursorExecutionMode,
-} from "../cursor/runner.js";
-import { CursorRunnerPool } from "../cursor/runner-pool.js";
+import type { ConversationManager } from "../conversation/index.js";
 import { modelForExecutionMode } from "../cursor/model-for-mode.js";
 import { shouldResumeCursorChat } from "../cursor/resume-policy.js";
-import { RunLogger } from "../logger/index.js";
+import {
+  CursorBusyError,
+  type CursorExecutionMode,
+  CursorNotFoundError,
+} from "../cursor/runner.js";
+import type { CursorRunnerPool } from "../cursor/runner-pool.js";
+import type { RunLogger } from "../logger/index.js";
 import {
   formatAskPlanModeReply,
   formatPlanReply,
   PLAN_APPROVAL_EMOJI,
   shouldPlanFirst,
 } from "../orchestration/plan-first.js";
-import { ProjectStore } from "../projects/index.js";
+import type { ProjectStore } from "../projects/index.js";
 import { splitMessage } from "../utils/split.js";
-import { DirectoryQueues } from "./directory-queues.js";
+import type { DirectoryQueues } from "./directory-queues.js";
 import { sessionStorageKey } from "./index.js";
 import {
   createLiveProgressReporter,
@@ -39,7 +35,6 @@ import {
 import { formatUsageFooter } from "./usage.js";
 
 export const QUEUE_CAP = 5;
-export const MAX_CONCURRENT = 3;
 
 export interface RunTarget {
   projectKey: string;
@@ -67,14 +62,14 @@ export class RunLifecycle {
     private readonly conversations: ConversationManager,
     readonly runners: CursorRunnerPool,
     readonly queues: DirectoryQueues,
-    private readonly logger: RunLogger
+    private readonly logger: RunLogger,
   ) {}
 
   async tryQueue(
     trimmed: string,
     delivery: DeliveryContext,
     target: RunTarget,
-    runOpts?: QueuedRunOptions
+    runOpts?: QueuedRunOptions,
   ): Promise<"idle" | "queued" | "full"> {
     const { workspace, projectKey } = target;
     const workspaceBusy = this.runners.isBusy(workspace);
@@ -95,8 +90,8 @@ export class RunLifecycle {
     if (!enqueued.ok) {
       await delivery.reply(
         delivery.formatOutput(
-          `Queue is full (${QUEUE_CAP} tasks for this project) — wait for something to finish or say *stop all*.`
-        )
+          `Queue is full (${QUEUE_CAP} tasks for this project) — wait for something to finish or say *stop all*.`,
+        ),
       );
       return "full";
     }
@@ -106,9 +101,9 @@ export class RunLifecycle {
       await delivery.reply(
         delivery.formatOutput(
           enqueued.position === 1
-            ? `Queued — waiting for a free agent (${running} running, max ${MAX_CONCURRENT})`
-            : `Queued — ${enqueued.position} tasks waiting for a free agent (${running} running)`
-        )
+            ? `Queued — waiting for a free agent (${running} running, max ${this.runners.maxConcurrent})`
+            : `Queued — ${enqueued.position} tasks waiting for a free agent (${running} running)`,
+        ),
       );
       return "queued";
     }
@@ -116,8 +111,8 @@ export class RunLifecycle {
     const ahead = 1 + (enqueued.position - 1);
     await delivery.reply(
       delivery.formatOutput(
-        ahead === 1 ? "Queued — 1 task ahead" : `Queued — ${ahead} tasks ahead`
-      )
+        ahead === 1 ? "Queued — 1 task ahead" : `Queued — ${ahead} tasks ahead`,
+      ),
     );
     return "queued";
   }
@@ -144,9 +139,7 @@ export class RunLifecycle {
         userPrompt: item.prompt,
         conversationKey: item.delivery.conversationKey,
       });
-      await item.delivery.reply(
-        item.delivery.formatOutput(formatAskPlanModeReply())
-      );
+      await item.delivery.reply(item.delivery.formatOutput(formatAskPlanModeReply()));
       await this.drainAfterRun(item.workspace);
       return;
     }
@@ -187,11 +180,22 @@ export class RunLifecycle {
     }
   }
 
+  /** Raw prompts stay out of routine logs unless LOG_PROMPTS is set. */
+  private promptForLog(prompt: string): string {
+    return this.config.logPrompts
+      ? `prompt=${prompt.slice(0, 80)}`
+      : `promptChars=${prompt.length}`;
+  }
+
+  private logEntryPrompt(prompt: string): string {
+    return this.config.logPrompts ? prompt : `(redacted, ${prompt.length} chars)`;
+  }
+
   async runPrompt(
     trimmed: string,
     delivery: DeliveryContext,
     target: RunTarget,
-    opts: RunPromptOptions = {}
+    opts: RunPromptOptions = {},
   ): Promise<void> {
     const { projectKey, workspace } = target;
     /** True once runAcquired owns (and will release) the slot. */
@@ -216,15 +220,15 @@ export class RunLifecycle {
           await delivery.reply(
             delivery.formatOutput(
               waitingForSlot
-                ? `Queued — waiting for a free agent (${this.runners.listBusy().length} running, max ${MAX_CONCURRENT})`
-                : "Queued — 1 task ahead"
-            )
+                ? `Queued — waiting for a free agent (${this.runners.listBusy().length} running, max ${this.runners.maxConcurrent})`
+                : "Queued — 1 task ahead",
+            ),
           );
         } else {
           await delivery.reply(
             delivery.formatOutput(
-              `Queue is full (${QUEUE_CAP} tasks for this project) — wait for something to finish or say *stop all*.`
-            )
+              `Queue is full (${QUEUE_CAP} tasks for this project) — wait for something to finish or say *stop all*.`,
+            ),
           );
         }
         return;
@@ -239,17 +243,13 @@ export class RunLifecycle {
       } catch (err) {
         console.warn("[cursor] react ack failed:", err);
         const sent = await delivery.reply(
-          delivery.formatOutput(
-            buildWorkingMessage(projectKey, opts.executionMode ?? "agent")
-          )
+          delivery.formatOutput(buildWorkingMessage(projectKey, opts.executionMode ?? "agent")),
         );
         if (sent?.messageId) progressBoard.attach(sent.messageId);
       }
     } else {
       const sent = await delivery.reply(
-        delivery.formatOutput(
-          buildWorkingMessage(projectKey, opts.executionMode ?? "agent")
-        )
+        delivery.formatOutput(buildWorkingMessage(projectKey, opts.executionMode ?? "agent")),
       );
       if (sent?.messageId) progressBoard.attach(sent.messageId);
     }
@@ -267,7 +267,7 @@ export class RunLifecycle {
     const userPromptForPlan = opts.userPromptForPlan ?? trimmed;
 
     console.log(
-      `[cursor] start platform=${delivery.platform} project=${projectKey} mode=${executionMode} prompt=${trimmed.slice(0, 80)}`
+      `[cursor] start platform=${delivery.platform} project=${projectKey} mode=${executionMode} ${this.promptForLog(trimmed)}`,
     );
 
     const liveProgress = createLiveProgressReporter({
@@ -288,9 +288,7 @@ export class RunLifecycle {
         try {
           await progressBoard.tick(elapsedSec);
           const last = liveProgress.lastText();
-          console.log(
-            `[cursor] ⏱ ${projectKey} | ${elapsedSec}s${last ? ` | ${last}` : ""}`
-          );
+          console.log(`[cursor] ⏱ ${projectKey} | ${elapsedSec}s${last ? ` | ${last}` : ""}`);
         } catch (err) {
           console.warn("[cursor] heartbeat send failed:", err);
         }
@@ -329,14 +327,14 @@ export class RunLifecycle {
       liveProgress.stop();
       heartbeat.stop();
       console.log(
-        `[cursor] done project=${projectKey} mode=${executionMode} exit=${result.exitCode} duration=${result.durationSec}s cancelled=${result.cancelled} timedOut=${result.timedOut}`
+        `[cursor] done project=${projectKey} mode=${executionMode} exit=${result.exitCode} duration=${result.durationSec}s cancelled=${result.cancelled} timedOut=${result.timedOut}`,
       );
 
       if (result.timedOut) {
         this.logger.log({
           time: new Date().toISOString(),
           project: projectKey,
-          prompt: trimmed,
+          prompt: this.logEntryPrompt(trimmed),
           duration: result.durationSec,
           exit: result.exitCode,
           error: "timed_out",
@@ -351,7 +349,7 @@ export class RunLifecycle {
         this.logger.log({
           time: new Date().toISOString(),
           project: projectKey,
-          prompt: trimmed,
+          prompt: this.logEntryPrompt(trimmed),
           duration: result.durationSec,
           exit: result.exitCode,
           error: "cancelled",
@@ -378,16 +376,11 @@ export class RunLifecycle {
       }
 
       // General runs are intentionally non-resuming — don't keep a Cursor chatId.
-      this.conversations.append(
-        storageKey,
-        trimmed,
-        response,
-        resume ? result.chatId : null
-      );
+      this.conversations.append(storageKey, trimmed, response, resume ? result.chatId : null);
       this.logger.log({
         time: new Date().toISOString(),
         project: projectKey,
-        prompt: trimmed,
+        prompt: this.logEntryPrompt(trimmed),
         response: response.slice(0, 2000),
         duration: result.durationSec,
         exit: result.exitCode,
@@ -466,7 +459,7 @@ export class RunLifecycle {
       this.logger.log({
         time: new Date().toISOString(),
         project: projectKey,
-        prompt: trimmed,
+        prompt: this.logEntryPrompt(trimmed),
         duration: 0,
         exit: null,
         error: message,

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,17 +8,15 @@ import { ProjectStore } from "../projects/index.js";
 import type { CommandContext } from "./index.js";
 import { handleUserMessage } from "./index.js";
 
-function baseCtx(
-  projects: ProjectStore,
-  overrides: Partial<CommandContext> = {}
-): CommandContext {
+function baseCtx(projects: ProjectStore, overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     projects,
+    project: projects.resolve("cliproom")!,
     raw: "",
     getRunStatus: () => ({ busy: [], queuedCount: 0 }),
-    stopCurrent: () => false,
+    stopProject: () => false,
     stopAllRuns: () => {},
-    clearCurrentQueue: () => 0,
+    clearProjectQueue: () => 0,
     clearAllQueues: () => 0,
     ...overrides,
   };
@@ -37,7 +35,6 @@ function setup() {
     stateFile: join(root, "state.json"),
     generalDir: join(root, "general"),
     cursorBin: "cursor",
-    defaultProject: "cliproom",
     appName: "CursorDiscord",
     cursorTimeoutMin: 15,
     openaiApiKey: null,
@@ -50,6 +47,8 @@ function setup() {
     cursorPlanModel: null,
     cursorAgentModel: null,
     cursorAskModel: null,
+    cursorMaxConcurrent: 3,
+    logPrompts: false,
   };
   const projects = new ProjectStore(config);
   const conversations = new ConversationManager(config.historyDir);
@@ -58,7 +57,7 @@ function setup() {
 }
 
 describe("new chat", () => {
-  it("clears the Cursor session for the current project", () => {
+  it("clears the Cursor session for the surface's project", () => {
     const { projects, conversations } = setup();
     expect(conversations.getChatId("cliproom")).toBe("old-session-123");
 

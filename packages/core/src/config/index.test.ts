@@ -1,8 +1,8 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadCoreConfig, loadEnvFile, resolveProjectPath } from "./index.js";
+import { loadCoreConfig, loadEnvFile, resolveCursorBin, resolveProjectPath } from "./index.js";
 
 const prev = { ...process.env };
 
@@ -23,10 +23,10 @@ describe("loadEnvFile", () => {
         "# comment",
         "",
         "CURSOR_BIN=my-cursor",
-        "QUOTED=\"hello world\"",
+        'QUOTED="hello world"',
         "SINGLE='x'",
         "NO_EQ_LINE",
-      ].join("\n")
+      ].join("\n"),
     );
     delete process.env.CURSOR_BIN;
     delete process.env.QUOTED;
@@ -60,7 +60,6 @@ describe("loadCoreConfig", () => {
   it("loads defaults and paths under the given root", () => {
     const root = mkdtempSync(join(tmpdir(), "cwa-cfg-"));
     delete process.env.CURSOR_BIN;
-    delete process.env.DEFAULT_PROJECT;
     delete process.env.APP_NAME;
     delete process.env.CURSOR_TIMEOUT_MIN;
     delete process.env.OPENAI_API_KEY;
@@ -76,8 +75,8 @@ describe("loadCoreConfig", () => {
     expect(cfg.logsDir).toBe(join(root, "logs"));
     expect(cfg.stateFile).toBe(join(root, "state.json"));
     expect(cfg.generalDir).toBe(join(root, "general"));
-    expect(cfg.cursorBin).toBe("cursor");
-    expect(cfg.defaultProject).toBe("general");
+    // Resolved via resolveCursorBin(); may be a local agent install when present.
+    expect(cfg.cursorBin).toBe(resolveCursorBin(undefined));
     expect(cfg.appName).toBe("CursorDiscord");
     expect(cfg.cursorTimeoutMin).toBe(15);
     expect(cfg.openaiApiKey).toBeNull();
@@ -100,7 +99,7 @@ describe("loadCoreConfig", () => {
         "CURSOR_PLAN_MODEL=gpt-5.2",
         "CURSOR_AGENT_MODEL=cursor-grok-4.5-high",
         "CURSOR_ASK_MODEL=cursor-grok-4.5-medium",
-      ].join("\n")
+      ].join("\n"),
     );
     delete process.env.CURSOR_PLAN_MODEL;
     delete process.env.CURSOR_AGENT_MODEL;
@@ -141,7 +140,7 @@ describe("loadCoreConfig", () => {
         "PREVIEW_PORTS=cliproom:5173",
         "PREVIEW_CLOUDFLARED_BIN=/usr/local/bin/cloudflared",
         "RETENTION_DAYS=3",
-      ].join("\n")
+      ].join("\n"),
     );
     delete process.env.OPENAI_API_KEY;
     delete process.env.PREVIEW_PORTS;
@@ -156,8 +155,36 @@ describe("loadCoreConfig", () => {
   });
 });
 
+describe("resolveCursorBin", () => {
+  it("uses CURSOR_BIN when set", () => {
+    expect(resolveCursorBin("  my-agent  ", { exists: () => true })).toBe("my-agent");
+  });
+
+  it("prefers Windows agent.cmd when installed", () => {
+    const agentCmd = join("C:\\Users\\me\\AppData\\Local", "cursor-agent", "agent.cmd");
+    expect(
+      resolveCursorBin(undefined, {
+        platform: "win32",
+        localAppData: "C:\\Users\\me\\AppData\\Local",
+        homeDir: "C:\\Users\\me",
+        exists: (p) => p === agentCmd,
+      }),
+    ).toBe(agentCmd);
+  });
+
+  it("falls back to cursor when no agent install is found", () => {
+    expect(
+      resolveCursorBin(undefined, {
+        platform: "linux",
+        homeDir: "/home/me",
+        exists: () => false,
+      }),
+    ).toBe("cursor");
+  });
+});
+
 describe("resolveProjectPath", () => {
   it("expands home-relative project paths", () => {
-    expect(resolveProjectPath("~/Projects/app")).toContain("Projects/app");
+    expect(resolveProjectPath("~/Projects/app")).toBe(resolve(homedir(), "Projects/app"));
   });
 });

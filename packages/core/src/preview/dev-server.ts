@@ -1,16 +1,15 @@
-import {
-  spawn as nodeSpawn,
-  type ChildProcess,
-  type SpawnOptions,
-} from "node:child_process";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
+// `npm` is a .cmd shim on Windows; see the note in cursor/runner.ts.
+import nodeSpawn from "cross-spawn";
+import { killProcessTree } from "../utils/kill-tree.js";
 import { probeLocalPort } from "./tunnel.js";
 
 export type DevServerSpawnFn = (
   command: string,
   args: readonly string[],
-  options: SpawnOptions
+  options: SpawnOptions,
 ) => ChildProcess;
 
 export type DevServerEnsureResult =
@@ -47,7 +46,7 @@ export class DevServerManager {
       probe?: (port: number) => Promise<boolean>;
       readyTimeoutMs?: number;
       pollMs?: number;
-    } = {}
+    } = {},
   ) {
     this.spawn = opts.spawn ?? nodeSpawn;
     this.probe = opts.probe ?? ((port) => probeLocalPort(port));
@@ -181,9 +180,9 @@ function killChild(child: ChildProcess): Promise<void> {
       return;
     }
     child.once("exit", () => resolve());
-    child.kill("SIGTERM");
+    killProcessTree(child);
     setTimeout(() => {
-      if (child.exitCode == null && !child.killed) child.kill("SIGKILL");
+      if (child.exitCode == null && !child.killed) killProcessTree(child, { force: true });
       resolve();
     }, 2000).unref?.();
   });

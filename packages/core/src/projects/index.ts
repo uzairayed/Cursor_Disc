@@ -1,18 +1,20 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { resolveProjectPath, type AppConfig } from "../config/index.js";
-import type {
-  PendingLargePrompt,
-  PendingPlan,
-} from "../orchestration/plan-first.js";
+import { type AppConfig, resolveProjectPath } from "../config/index.js";
+import type { PendingLargePrompt, PendingPlan } from "../orchestration/plan-first.js";
 import { loadProjectsConfig, type ProjectsMap } from "./discover.js";
 
-export type { ProjectsMap };
-export type { PendingLargePrompt, PendingPlan };
+export type { PendingLargePrompt, PendingPlan, ProjectsMap };
+
+/** A configured project resolved to the absolute path Cursor runs in. */
+export interface ResolvedProject {
+  key: string;
+  /** Absolute workspace path. */
+  path: string;
+  /** Path as written in projects.json (may still contain `~`). */
+  displayPath: string;
+}
 
 export interface SessionState {
-  currentProject: string | null;
-  awaitingProjectPick?: boolean;
   /** @deprecated legacy single-slot; migrated into pendingPlans */
   pendingPlan?: PendingPlan | null;
   /** @deprecated legacy single-slot; migrated into pendingLargePrompts */
@@ -23,11 +25,16 @@ export interface SessionState {
   pendingLargePrompts?: Record<string, PendingLargePrompt>;
 }
 
+/**
+ * Known projects plus the per-project plan holds waiting on approval.
+ *
+ * Deliberately holds no "current project": the chat surface a message arrived
+ * on decides its project, and several projects can be running at once, so a
+ * single shared current would be wrong for all but one of them.
+ */
 export class ProjectStore {
   private projects: ProjectsMap = {};
   private state: SessionState = {
-    currentProject: null,
-    awaitingProjectPick: false,
     pendingPlans: {},
     pendingLargePrompts: {},
   };
@@ -42,7 +49,7 @@ export class ProjectStore {
       writeFileSync(
         this.config.projectsFile,
         `${JSON.stringify({ dirs: [], exclude: [], aliases: {} }, null, 2)}\n`,
-        "utf8"
+        "utf8",
       );
     }
     const raw = JSON.parse(readFileSync(this.config.projectsFile, "utf8")) as unknown;
@@ -52,42 +59,23 @@ export class ProjectStore {
       general: this.config.generalDir,
       ...loadProjectsConfig(raw),
     };
-
-    if (!this.state.currentProject && this.config.defaultProject) {
-      const key = this.config.defaultProject.toLowerCase();
-      if (this.projects[key]) {
-        this.state.currentProject = key;
-        this.saveState();
-      }
-    }
   }
 
   private loadState(): void {
     if (!existsSync(this.config.stateFile)) {
-      this.state = {
-        currentProject: this.config.defaultProject?.toLowerCase() ?? null,
-        awaitingProjectPick: false,
-        pendingPlans: {},
-        pendingLargePrompts: {},
-      };
+      this.state = { pendingPlans: {}, pendingLargePrompts: {} };
       this.saveState();
       return;
     }
     const loaded = JSON.parse(readFileSync(this.config.stateFile, "utf8")) as SessionState;
-    const pendingPlans = migratePendingPlans(loaded);
-    const pendingLargePrompts = migratePendingLargePrompts(loaded);
     this.state = {
-      currentProject: loaded.currentProject ?? null,
-      awaitingProjectPick: Boolean(loaded.awaitingProjectPick),
-      pendingPlans,
-      pendingLargePrompts,
+      pendingPlans: migratePendingPlans(loaded),
+      pendingLargePrompts: migratePendingLargePrompts(loaded),
     };
   }
 
   private saveState(): void {
     const toSave: SessionState = {
-      currentProject: this.state.currentProject,
-      awaitingProjectPick: this.state.awaitingProjectPick,
       pendingPlans: this.state.pendingPlans ?? {},
       pendingLargePrompts: this.state.pendingLargePrompts ?? {},
     };
@@ -102,39 +90,12 @@ export class ProjectStore {
     return this.projects[key.toLowerCase()] ?? null;
   }
 
-  resolve(key: string): { key: string; path: string } | null {
+  resolve(key: string): ResolvedProject | null {
     this.reload();
     const normalized = key.toLowerCase();
     const raw = this.projects[normalized];
     if (!raw) return null;
-    return { key: normalized, path: resolveProjectPath(raw) };
-  }
-
-  setCurrent(key: string): { key: string; path: string } | null {
-    const resolved = this.resolve(key);
-    if (!resolved) return null;
-    this.state.currentProject = resolved.key;
-    this.state.awaitingProjectPick = false;
-    this.saveState();
-    mkdirSync(join(this.config.historyDir, resolved.key), { recursive: true });
-    return resolved;
-  }
-
-  getCurrent(): { key: string; path: string; displayPath: string } | null {
-    if (!this.state.currentProject) return null;
-    const resolved = this.resolve(this.state.currentProject);
-    if (!resolved) return null;
-    return {
-      ...resolved,
-      displayPath: this.projects[resolved.key],
-    };
-  }
-
-  formatList(): string {
-    this.reload();
-    const keys = this.list();
-    if (keys.length === 0) return "(no projects configured in projects.json)";
-    return keys.map((k) => k.toUpperCase()).join("\n");
+    return { key: normalized, path: resolveProjectPath(raw), displayPath: raw };
   }
 
   formatPicker(): string {
@@ -144,29 +105,16 @@ export class ProjectStore {
     return keys.map((k, i) => `${i + 1}. ${k.toUpperCase()}`).join("\n");
   }
 
-  pickByNumber(n: number): { key: string; path: string } | null {
-    this.reload();
-    const keys = this.list();
-    if (n < 1 || n > keys.length) return null;
-    return this.setCurrent(keys[n - 1]!);
+  /** Reverse lookup: which project key owns this absolute workspace path? */
+  keyForWorkspace(workspace: string): string | null {
+    for (const key of this.list()) {
+      if (this.resolve(key)?.path === workspace) return key;
+    }
+    return null;
   }
 
-  setAwaitingProjectPick(value: boolean): void {
-    this.state.awaitingProjectPick = value;
-    this.saveState();
-  }
-
-  isAwaitingProjectPick(): boolean {
-    return Boolean(this.state.awaitingProjectPick);
-  }
-
-  /**
-   * Pending plan for `projectKey`, or the current project's plan when omitted.
-   */
-  getPendingPlan(projectKey?: string): PendingPlan | null {
-    const key = (projectKey ?? this.state.currentProject)?.toLowerCase();
-    if (!key) return null;
-    return this.state.pendingPlans?.[key] ?? null;
+  getPendingPlan(projectKey: string): PendingPlan | null {
+    return this.state.pendingPlans?.[projectKey.toLowerCase()] ?? null;
   }
 
   /** Find a pending plan by Discord approval message id (any project). */
@@ -177,55 +125,39 @@ export class ProjectStore {
     return null;
   }
 
-  /**
-   * Set or clear a pending plan. Passing `null` clears `projectKey` (or current).
-   * Passing a plan stores it under `plan.projectKey` without touching other projects.
-   */
-  setPendingPlan(plan: PendingPlan | null, projectKey?: string): void {
+  setPendingPlan(plan: PendingPlan): void {
     if (!this.state.pendingPlans) this.state.pendingPlans = {};
-    if (plan) {
-      const key = plan.projectKey.toLowerCase();
-      this.state.pendingPlans[key] = { ...plan, projectKey: key };
-    } else {
-      const key = (projectKey ?? this.state.currentProject)?.toLowerCase();
-      if (key) delete this.state.pendingPlans[key];
-    }
+    const key = plan.projectKey.toLowerCase();
+    this.state.pendingPlans[key] = { ...plan, projectKey: key };
     this.saveState();
   }
 
-  getPendingLargePrompt(projectKey?: string): PendingLargePrompt | null {
-    const key = (projectKey ?? this.state.currentProject)?.toLowerCase();
-    if (!key) return null;
-    return this.state.pendingLargePrompts?.[key] ?? null;
+  getPendingLargePrompt(projectKey: string): PendingLargePrompt | null {
+    return this.state.pendingLargePrompts?.[projectKey.toLowerCase()] ?? null;
   }
 
   /**
-   * Set or clear a large-prompt hold. Setting one clears that project's pending
-   * plan only (other projects are untouched).
+   * Hold a large prompt for `pending.projectKey`. Supersedes that project's
+   * pending plan only; other projects are untouched.
    */
-  setPendingLargePrompt(pending: PendingLargePrompt | null, projectKey?: string): void {
+  setPendingLargePrompt(pending: PendingLargePrompt): void {
     if (!this.state.pendingLargePrompts) this.state.pendingLargePrompts = {};
     if (!this.state.pendingPlans) this.state.pendingPlans = {};
-    if (pending) {
-      const key = pending.projectKey.toLowerCase();
-      this.state.pendingLargePrompts[key] = { ...pending, projectKey: key };
-      delete this.state.pendingPlans[key];
-    } else {
-      const key = (projectKey ?? this.state.currentProject)?.toLowerCase();
-      if (key) delete this.state.pendingLargePrompts[key];
-    }
+    const key = pending.projectKey.toLowerCase();
+    this.state.pendingLargePrompts[key] = { ...pending, projectKey: key };
+    delete this.state.pendingPlans[key];
     this.saveState();
   }
 
-  /** Clear plan + large-prompt holds for one project. */
+  /** Clear plan + large-prompt holds for one project. Returns true if any existed. */
   clearPendingForProject(projectKey: string): boolean {
     const key = projectKey.toLowerCase();
-    const hadPlan = Boolean(this.state.pendingPlans?.[key]);
-    const hadLarge = Boolean(this.state.pendingLargePrompts?.[key]);
+    const had =
+      Boolean(this.state.pendingPlans?.[key]) || Boolean(this.state.pendingLargePrompts?.[key]);
     if (this.state.pendingPlans) delete this.state.pendingPlans[key];
     if (this.state.pendingLargePrompts) delete this.state.pendingLargePrompts[key];
-    if (hadPlan || hadLarge) this.saveState();
-    return hadPlan || hadLarge;
+    if (had) this.saveState();
+    return had;
   }
 }
 
@@ -242,9 +174,7 @@ function migratePendingPlans(loaded: SessionState): Record<string, PendingPlan> 
   return map;
 }
 
-function migratePendingLargePrompts(
-  loaded: SessionState
-): Record<string, PendingLargePrompt> {
+function migratePendingLargePrompts(loaded: SessionState): Record<string, PendingLargePrompt> {
   const map: Record<string, PendingLargePrompt> = {};
   if (loaded.pendingLargePrompts && typeof loaded.pendingLargePrompts === "object") {
     for (const [key, raw] of Object.entries(loaded.pendingLargePrompts)) {
@@ -270,15 +200,14 @@ function normalizePendingPlan(raw: PendingPlan | null | undefined): PendingPlan 
     projectKey: raw.projectKey.toLowerCase(),
     userPrompt: raw.userPrompt,
     planText: raw.planText,
-    conversationKey:
-      typeof raw.conversationKey === "string" ? raw.conversationKey : undefined,
+    conversationKey: typeof raw.conversationKey === "string" ? raw.conversationKey : undefined,
     approvalMessageId:
       typeof raw.approvalMessageId === "string" ? raw.approvalMessageId : undefined,
   };
 }
 
 function normalizePendingLargePrompt(
-  raw: PendingLargePrompt | null | undefined
+  raw: PendingLargePrompt | null | undefined,
 ): PendingLargePrompt | null {
   if (!raw || typeof raw !== "object") return null;
   if (typeof raw.projectKey !== "string" || typeof raw.userPrompt !== "string") {
@@ -287,7 +216,6 @@ function normalizePendingLargePrompt(
   return {
     projectKey: raw.projectKey.toLowerCase(),
     userPrompt: raw.userPrompt,
-    conversationKey:
-      typeof raw.conversationKey === "string" ? raw.conversationKey : undefined,
+    conversationKey: typeof raw.conversationKey === "string" ? raw.conversationKey : undefined,
   };
 }

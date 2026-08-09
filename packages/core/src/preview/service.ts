@@ -4,9 +4,9 @@ import { DevServerManager } from "./dev-server.js";
 import { portBelongsToProject } from "./port-owner.js";
 import {
   CloudflareTunnelManager,
-  PreviewTunnelError,
   joinPreviewUrl,
   PREVIEW_PICK_PARAM,
+  PreviewTunnelError,
   probeLocalPort,
   withPreviewQuery,
 } from "./tunnel.js";
@@ -101,23 +101,19 @@ export function formatPreviewReady(opts: {
       ];
   const lines = [
     headline,
-    opts.startedDevServer
-      ? `Started \`npm run dev\` for you on port ${opts.port}.`
-      : null,
+    opts.startedDevServer ? `Started \`npm run dev\` for you on port ${opts.port}.` : null,
     opts.pick ? "Opened with the AI element picker (`?pick=1`)." : null,
     "",
     opts.url,
     "",
     ...pickLines,
+    "Heads up: **anyone with this link** can reach your local server while the tunnel is up.",
     "Say `/preview_stop` when you're done (stops the tunnel; also stops a dev server we started).",
   ];
   return lines.filter((line) => line != null).join("\n");
 }
 
-export function formatPreviewPortDown(opts: {
-  projectKey: string;
-  port: number;
-}): string {
+export function formatPreviewPortDown(opts: { projectKey: string; port: number }): string {
   return [
     `Nothing is listening on **localhost:${opts.port}** for **${opts.projectKey.toUpperCase()}**, and I couldn't start \`npm run dev\`.`,
     "",
@@ -133,7 +129,7 @@ export function formatPreviewDevServerFailed(opts: {
 }): string {
   const name = opts.projectKey.toUpperCase();
   const hints: Record<string, string> = {
-    NO_PROJECT_DIR: `Project folder for **${name}** wasn't found on the Mac.`,
+    NO_PROJECT_DIR: `Project folder for **${name}** wasn't found on this machine.`,
     NO_PACKAGE_JSON: `**${name}** has no package.json — can't run \`npm run dev\`.`,
     NO_DEV_SCRIPT: `**${name}** has no \`dev\` script in package.json.`,
     SPAWN_FAILED: `Couldn't spawn \`npm run dev\` for **${name}**.`,
@@ -145,7 +141,12 @@ export function formatPreviewDevServerFailed(opts: {
   const head =
     hints[opts.reason] ??
     `Couldn't get a local server running for **${name}** on port ${opts.port}.`;
-  return [head, opts.detail ? `\n${opts.detail}` : null, "", "Fix the app locally, then `/preview` again."]
+  return [
+    head,
+    opts.detail ? `\n${opts.detail}` : null,
+    "",
+    "Fix the app locally, then `/preview` again.",
+  ]
     .filter((line) => line != null)
     .join("\n");
 }
@@ -154,18 +155,16 @@ export function formatPreviewBinaryMissing(bin: string): string {
   return [
     `Can't start a preview tunnel — \`${bin}\` isn't installed (or not on PATH).`,
     "",
-    "On the Mac:",
+    "Install it with your OS package manager:",
     "```",
-    "brew install cloudflared",
+    "Windows: winget install cloudflare.cloudflared",
+    "macOS:   brew install cloudflared",
     "```",
     "Then run `/preview` again.",
   ].join("\n");
 }
 
-export function formatPreviewStopped(opts: {
-  projectKey: string;
-  port: number;
-}): string {
+export function formatPreviewStopped(opts: { projectKey: string; port: number }): string {
   return `Closed the preview tunnel for **${opts.projectKey.toUpperCase()}** (was localhost:${opts.port}).`;
 }
 
@@ -219,10 +218,7 @@ export class PreviewService {
   private readonly tunnels: CloudflareTunnelManager;
   private readonly devServers: DevServerManager;
   private readonly probe: (port: number) => Promise<boolean>;
-  private readonly belongsToProject: (
-    port: number,
-    projectPath: string
-  ) => Promise<boolean>;
+  private readonly belongsToProject: (port: number, projectPath: string) => Promise<boolean>;
   private readonly projectPort = new Map<string, number>();
 
   constructor(private readonly opts: PreviewServiceOptions) {
@@ -231,16 +227,13 @@ export class PreviewService {
     this.portsEnv = parsePreviewPortsEnv(opts.portsEnv);
     this.probe = opts.probe ?? ((port) => probeLocalPort(port));
     this.belongsToProject =
-      opts.belongsToProject ??
-      ((port, projectPath) => portBelongsToProject(port, projectPath));
+      opts.belongsToProject ?? ((port, projectPath) => portBelongsToProject(port, projectPath));
     this.devServers =
       opts.devServers ??
       new DevServerManager({
         probe: this.probe,
       });
-    this.tunnels =
-      opts.tunnelManager ??
-      new CloudflareTunnelManager({ bin: this.bin });
+    this.tunnels = opts.tunnelManager ?? new CloudflareTunnelManager({ bin: this.bin });
   }
 
   private portsFromFile(): PreviewPortsMap {
@@ -463,9 +456,7 @@ export class PreviewService {
       return { ok: false, message: formatPreviewNotRunning(key) };
     }
     await this.tunnels.stopTunnel(port);
-    const stoppedServer = this.devServers.owns(port)
-      ? await this.devServers.stop(port)
-      : false;
+    const stoppedServer = this.devServers.owns(port) ? await this.devServers.stop(port) : false;
     this.projectPort.delete(key);
     const base = formatPreviewStopped({ projectKey: key, port });
     return {

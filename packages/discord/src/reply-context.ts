@@ -37,9 +37,7 @@ export function formatReplyContext(ref: ReferencedMessageLike): string | null {
  * If this message is a Discord reply, fetch/include the referenced message text.
  * Returns null when there is no reply context.
  */
-export async function resolveReplyContext(
-  message: ReplySourceMessage
-): Promise<string | null> {
+export async function resolveReplyContext(message: ReplySourceMessage): Promise<string | null> {
   if (!message.reference?.messageId) return null;
 
   let ref: ReferencedMessageLike | null | undefined = message.referencedMessage;
@@ -57,16 +55,14 @@ export async function resolveReplyContext(
 /** Combine reply context + user prompt for Cursor. */
 export function mergeReplyIntoPrompt(
   userPrompt: string | null,
-  replyContext: string | null
+  replyContext: string | null,
 ): string | null {
   const prompt = userPrompt?.trim() || "";
   if (!replyContext) return prompt || null;
   if (!prompt) {
-    return [
-      replyContext,
-      "",
-      "Please read the quoted message above and respond helpfully.",
-    ].join("\n");
+    return [replyContext, "", "Please read the quoted message above and respond helpfully."].join(
+      "\n",
+    );
   }
   return `${replyContext}\n\n${prompt}`;
 }

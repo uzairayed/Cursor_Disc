@@ -11,8 +11,8 @@ describe("probeLocalPort", () => {
         (s) =>
           new Promise<void>((resolve) => {
             s.close(() => resolve());
-          })
-      )
+          }),
+      ),
     );
   });
 

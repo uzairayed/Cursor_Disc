@@ -1,13 +1,12 @@
 import {
   buildVoicePrompt,
-  formatForDiscord,
   type DeliveryContext,
+  formatForDiscord,
   type MessageRouter,
 } from "@cursor-bridge/core";
 import type { TextBasedChannel } from "discord.js";
 
-const PROGRESS_HINT =
-  /^(working|queued|still working|checking localhost|live|heartbeat|\.\.\.|…)/i;
+const PROGRESS_HINT = /^(working|queued|still working|checking localhost|live|heartbeat|\.\.\.|…)/i;
 
 export function pickFinalReply(replies: string[]): string | null {
   const cleaned = replies.map((r) => r.trim()).filter(Boolean);
@@ -32,6 +31,11 @@ export async function captureRouterReply(opts: {
 
   const delivery: DeliveryContext = {
     platform: "discord",
+    // Voice has no channel to derive a project from, so it is pinned to the
+    // general workspace to match its general surface. Without this it would
+    // inherit whatever project was last touched in any channel and could run
+    // `--force` edits against a repo the speaker never named.
+    projectKey: "general",
     conversationKey: opts.conversationKey,
     surface: "general",
     maxChars: 1900,
@@ -39,7 +43,7 @@ export async function captureRouterReply(opts: {
     reply: async (text) => {
       replies.push(text);
       const channel = opts.textChannel;
-      if (!channel || !channel.isSendable()) return;
+      if (!channel?.isSendable()) return;
       const msg = await channel.send({ content: text.slice(0, 2000) });
       return { messageId: msg.id };
     },
