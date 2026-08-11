@@ -203,14 +203,8 @@ describe("ensureGuildProjectChannel", () => {
           parentId: "cat-mac",
         },
       ],
-      [
-        "cat-mac",
-        { id: "cat-mac", name: "macbook", type: ChannelType.GuildCategory },
-      ],
-      [
-        "cat-win",
-        { id: "cat-win", name: "windows-pc", type: ChannelType.GuildCategory },
-      ],
+      ["cat-mac", { id: "cat-mac", name: "macbook", type: ChannelType.GuildCategory }],
+      ["cat-win", { id: "cat-win", name: "windows-pc", type: ChannelType.GuildCategory }],
     ]);
 
     const guild = {
