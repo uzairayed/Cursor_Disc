@@ -27,6 +27,20 @@ describe("loadPreviewPorts", () => {
   it("returns empty for legacy flat maps", () => {
     expect(loadPreviewPorts({ cliproom: "/tmp/clip" })).toEqual({});
   });
+
+  it("reads previewPorts from the active devices.<host> section", () => {
+    expect(
+      loadPreviewPorts(
+        {
+          devices: {
+            "windows-pc": { previewPorts: { motocards: 3000 } },
+            macbook: { previewPorts: { fleet: 5173 } },
+          },
+        },
+        { host: "windows-pc" },
+      ),
+    ).toEqual({ motocards: 3000 });
+  });
 });
 
 describe("resolvePreviewPort", () => {

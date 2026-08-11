@@ -71,6 +71,7 @@ function setup(): { config: AppConfig; workspace: string; fleetWorkspace: string
       cursorAskModel: null,
       cursorMaxConcurrent: 3,
       logPrompts: false,
+      bridgeHost: "test-host",
     },
   };
 }

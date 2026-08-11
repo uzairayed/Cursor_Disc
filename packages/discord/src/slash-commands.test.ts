@@ -21,6 +21,7 @@ describe("buildSlashCommandBodies", () => {
         "preview_pick",
         "preview_stop",
         "project",
+        "projects",
         "prompt",
         "run",
         "status",
@@ -103,6 +104,12 @@ describe("promptFromSlashCommand", () => {
         getString: () => null,
       }),
     ).toBe("current");
+  });
+
+  it("maps /projects to list projects", () => {
+    expect(promptFromSlashCommand({ commandName: "projects", getString: () => null })).toBe(
+      "list projects",
+    );
   });
 
   it("returns null for unknown commands and preview (handled separately)", () => {

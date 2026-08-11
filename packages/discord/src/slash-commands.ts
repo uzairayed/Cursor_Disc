@@ -63,6 +63,10 @@ export function buildSlashCommandBodies(): RESTPostAPIChatInputApplicationComman
       ],
     },
     {
+      name: "projects",
+      description: "List configured projects you can switch to",
+    },
+    {
       name: "plan",
       description: "Enter plan mode for a held large prompt",
     },
@@ -186,6 +190,8 @@ export function promptFromSlashCommand(opts: {
       const name = getString("name")?.trim();
       return name ? `switch to ${name}` : "current";
     }
+    case "projects":
+      return "list projects";
     case "plan":
       return "plan";
     case "go":

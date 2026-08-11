@@ -1,11 +1,23 @@
 {
-  "dirs": ["/path/to/your/projects"],
   "exclude": ["node_modules", "dist", "build", ".next"],
-  "aliases": {
-    "my-app": "/path/to/your/projects/my-app",
-    "general": "/path/to/Cursor_Disc/general"
-  },
-  "previewPorts": {
-    "my-app": 3000
+  "devices": {
+    "windows-pc": {
+      "dirs": ["D:/p_projects"],
+      "aliases": {
+        "general": "D:/p_projects/Cursor_disc/general"
+      },
+      "previewPorts": {
+        "my-app": 3000
+      }
+    },
+    "macbook": {
+      "dirs": ["/Users/YOU/p_projects"],
+      "aliases": {
+        "general": "/Users/YOU/p_projects/Cursor_disc/general"
+      },
+      "previewPorts": {
+        "my-app": 3000
+      }
+    }
   }
 }

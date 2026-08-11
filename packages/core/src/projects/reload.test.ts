@@ -33,6 +33,7 @@ function setup(): { store: ProjectStore; projectsFile: string; root: string } {
     cursorAskModel: null,
     cursorMaxConcurrent: 3,
     logPrompts: false,
+    bridgeHost: "test-host",
   };
   return { store: new ProjectStore(config), projectsFile, root };
 }

@@ -115,8 +115,9 @@ async function handleProjectNavigation(opts: {
   projectChannels: ProjectChannelRegistry;
   workspace: ReturnType<typeof resolveWorkspaceContext>;
   intentKey: string;
+  categoryName: string;
 }): Promise<void> {
-  const { message, delivery, projectChannels, workspace, intentKey } = opts;
+  const { message, delivery, projectChannels, workspace, intentKey, categoryName } = opts;
   const guild = message.guild;
 
   if (workspace.mode === "project") {
@@ -133,6 +134,7 @@ async function handleProjectNavigation(opts: {
         guild,
         projectKey: intentKey,
         registry: projectChannels,
+        categoryName,
       });
       requestedChannelId = ensured.channelId;
     }
@@ -156,6 +158,7 @@ async function handleProjectNavigation(opts: {
         guild,
         projectKey: "general",
         registry: projectChannels,
+        categoryName,
       });
       await delivery.reply(
         delivery.formatOutput(
@@ -181,6 +184,7 @@ async function handleProjectNavigation(opts: {
     guild,
     projectKey: intentKey,
     registry: projectChannels,
+    categoryName,
   });
   await delivery.reply(
     delivery.formatOutput(
@@ -253,8 +257,9 @@ export async function handleDiscordMessage(opts: {
   }
 
   const rawContent = message.content?.trim() || "";
-  const text =
-    !ctx.isDm && botUserId ? stripBotMentions(rawContent, botUserId) || null : rawContent || null;
+  // Strip in DMs too — users often @mention out of habit; leaving it breaks
+  // local command matchers that expect a clean "list projects" / "help".
+  const text = botUserId ? stripBotMentions(rawContent, botUserId) || null : rawContent || null;
   const inbox = join(config.historyDir, "inbox");
 
   const workspace = resolveWorkspaceContext({
@@ -313,6 +318,7 @@ export async function handleDiscordMessage(opts: {
         guild: message.guild,
         projectKey: "general",
         registry: projectChannels,
+        categoryName: config.bridgeHost,
       });
     } catch (err) {
       console.warn("[discord] could not ensure #general:", err);
@@ -421,6 +427,7 @@ export async function handleDiscordMessage(opts: {
       projectChannels,
       workspace,
       intentKey: intent.key,
+      categoryName: config.bridgeHost,
     });
     return;
   }

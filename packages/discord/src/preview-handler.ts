@@ -8,6 +8,7 @@ export function createPreviewService(config: DiscordConfig): PreviewService {
     defaultPort: config.previewDefaultPort,
     cloudflaredBin: config.previewCloudflaredBin,
     portsEnv: config.previewPortsEnv,
+    bridgeHost: config.bridgeHost,
   });
 }
 

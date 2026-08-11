@@ -50,6 +50,7 @@ function setup(): ProjectStore {
     cursorAskModel: null,
     cursorMaxConcurrent: 3,
     logPrompts: false,
+    bridgeHost: "test-host",
   };
   return new ProjectStore(config);
 }

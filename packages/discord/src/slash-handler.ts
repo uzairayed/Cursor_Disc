@@ -301,6 +301,7 @@ export async function handleDiscordSlashCommand(opts: {
         guild: interaction.guild,
         projectKey: "general",
         registry: projectChannels,
+        categoryName: config.bridgeHost,
       });
     } catch (err) {
       console.warn("[discord] could not ensure #general:", err);
@@ -333,6 +334,7 @@ export async function handleDiscordSlashCommand(opts: {
           guild,
           projectKey: intentKey === "general" ? "general" : intentKey,
           registry: projectChannels,
+          categoryName: config.bridgeHost,
         });
         requestedChannelId = ensured.channelId;
       }
@@ -355,6 +357,7 @@ export async function handleDiscordSlashCommand(opts: {
           guild,
           projectKey: "general",
           registry: projectChannels,
+          categoryName: config.bridgeHost,
         });
         await delivery.reply(
           delivery.formatOutput(
@@ -380,6 +383,7 @@ export async function handleDiscordSlashCommand(opts: {
       guild,
       projectKey: intentKey,
       registry: projectChannels,
+      categoryName: config.bridgeHost,
     });
     await delivery.reply(
       delivery.formatOutput(
