@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expandHome } from "../utils/path.js";
@@ -46,6 +46,11 @@ export interface AppConfig {
   cursorMaxConcurrent: number;
   /** Write raw prompt text to run logs/console (default false = redacted). */
   logPrompts: boolean;
+  /**
+   * This machine's bridge id (BRIDGE_HOST, else os.hostname()).
+   * Selects the matching `devices.<host>` section in projects.json.
+   */
+  bridgeHost: string;
 }
 
 export function loadEnvFile(path: string, opts: { override?: boolean } = {}): void {
@@ -106,6 +111,7 @@ export function loadCoreConfig(rootDir: string = ROOT_DIR): AppConfig {
       Number.parseInt(process.env.CURSOR_MAX_CONCURRENT?.trim() || "3", 10) || 3,
     ),
     logPrompts: /^(1|true|yes)$/i.test(process.env.LOG_PROMPTS?.trim() ?? ""),
+    bridgeHost: process.env.BRIDGE_HOST?.trim() || osHostname(),
   };
 }
 

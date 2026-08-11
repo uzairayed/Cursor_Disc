@@ -36,6 +36,7 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     cursorAskModel: null,
     cursorMaxConcurrent: 3,
     logPrompts: false,
+    bridgeHost: "test-host",
     ...overrides,
   };
 }

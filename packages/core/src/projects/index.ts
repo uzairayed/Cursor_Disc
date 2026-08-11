@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { type AppConfig, resolveProjectPath } from "../config/index.js";
 import type { PendingLargePrompt, PendingPlan } from "../orchestration/plan-first.js";
-import { loadProjectsConfig, type ProjectsMap } from "./discover.js";
+import { formatDevicePicker, loadProjectsConfig, type ProjectsMap } from "./discover.js";
 
 export type { PendingLargePrompt, PendingPlan, ProjectsMap };
 
@@ -34,6 +34,7 @@ export interface SessionState {
  */
 export class ProjectStore {
   private projects: ProjectsMap = {};
+  private rawFile: unknown = null;
   private state: SessionState = {
     pendingPlans: {},
     pendingLargePrompts: {},
@@ -48,16 +49,17 @@ export class ProjectStore {
     if (!existsSync(this.config.projectsFile)) {
       writeFileSync(
         this.config.projectsFile,
-        `${JSON.stringify({ dirs: [], exclude: [], aliases: {} }, null, 2)}\n`,
+        `${JSON.stringify({ exclude: [], devices: {} }, null, 2)}\n`,
         "utf8",
       );
     }
     const raw = JSON.parse(readFileSync(this.config.projectsFile, "utf8")) as unknown;
+    this.rawFile = raw;
     mkdirSync(this.config.generalDir, { recursive: true });
     // Built-in general workspace always available; file aliases can override path.
     this.projects = {
       general: this.config.generalDir,
-      ...loadProjectsConfig(raw),
+      ...loadProjectsConfig(raw, { host: this.config.bridgeHost }),
     };
   }
 
@@ -100,9 +102,11 @@ export class ProjectStore {
 
   formatPicker(): string {
     this.reload();
-    const keys = this.list();
-    if (keys.length === 0) return "No projects are configured yet.";
-    return keys.map((k, i) => `${i + 1}. ${k.toUpperCase()}`).join("\n");
+    return formatDevicePicker({
+      raw: this.rawFile,
+      host: this.config.bridgeHost,
+      localKeys: this.list(),
+    });
   }
 
   /** Reverse lookup: which project key owns this absolute workspace path? */

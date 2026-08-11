@@ -38,6 +38,7 @@ function setup(): {
     cursorAskModel: null,
     cursorMaxConcurrent: 3,
     logPrompts: false,
+    bridgeHost: "test-host",
   };
   return { config, router: new MessageRouter(config), workspace };
 }

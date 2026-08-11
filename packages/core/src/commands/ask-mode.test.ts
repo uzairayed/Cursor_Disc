@@ -34,6 +34,7 @@ function setup(): AppConfig {
     cursorAskModel: null,
     cursorMaxConcurrent: 3,
     logPrompts: false,
+    bridgeHost: "test-host",
   };
 }
 
@@ -134,6 +135,22 @@ describe("MessageRouter ask mode", () => {
     await router.handle("how are you", d);
 
     expect(run.mock.calls[0]![0]!.executionMode).toBe("ask");
+  });
+
+  it("lists projects on general without calling Cursor", async () => {
+    const config = setup();
+    mkdirSync(config.generalDir, { recursive: true });
+    const router = new MessageRouter(config);
+    const run = vi.spyOn(router.runners, "runAcquired");
+
+    const replies: string[] = [];
+    const d = delivery(replies, "general");
+    d.surface = "general";
+    await router.handle("list projects", d);
+
+    expect(run).not.toHaveBeenCalled();
+    expect(replies.some((r) => /CRM/i.test(r))).toBe(true);
+    expect(replies.some((r) => /switch to/i.test(r))).toBe(true);
   });
 
   it("keeps project surface on agent unless ask is requested", async () => {

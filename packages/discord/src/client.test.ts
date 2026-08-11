@@ -364,6 +364,22 @@ describe("handleDiscordMessage", () => {
     expect(router.handle.mock.calls[0]?.[0]).toBe("status");
   });
 
+  it("strips the bot @mention in DMs before routing", async () => {
+    const { message } = mockMessage({
+      content: `<@${BOT_ID}> list projects`,
+      channelType: ChannelType.DM,
+      mentionBot: true,
+    });
+    const router = mockRouter();
+    await handleDiscordMessage({
+      message: message as never,
+      config: baseConfig(),
+      router: router as never,
+      projectChannels: emptyRegistry(),
+    });
+    expect(router.handle.mock.calls[0]?.[0]).toBe("list projects");
+  });
+
   it("from a project channel, refuses switching to another project", async () => {
     const reg = emptyRegistry();
     reg.set("g1", "crm", "project-chan-1");

@@ -64,6 +64,31 @@ export class MessageRouter {
     }
     const target: RunTarget = { projectKey: project.key, workspace: project.path };
 
+    // Local commands (list projects, help, stop, …) before general→ask, or they
+    // get sent to Cursor as chat on the GENERAL surface.
+    const command = handleUserMessage({
+      projects: this.projects,
+      project,
+      getRunStatus: () => this.getRunStatus(),
+      stopProject: () => this.runners.stop(project.path),
+      stopAllRuns: () => {
+        this.runners.stopAll();
+      },
+      clearProjectQueue: () => this.queues.clear(project.path),
+      clearAllQueues: () => this.queues.clearAll(),
+      raw: trimmed,
+      conversations: this.conversations,
+      conversationKey: delivery.conversationKey,
+      surface: delivery.surface,
+    });
+
+    if (command.handled) {
+      if (command.reply) {
+        await delivery.reply(delivery.formatOutput(command.reply));
+      }
+      return;
+    }
+
     // General: ask for chat; agent when live search is needed (ask blocks web).
     if (!opts.executionMode && delivery.surface === "general") {
       opts = {
@@ -123,29 +148,6 @@ export class MessageRouter {
       this.projects.clearPendingForProject(project.key);
       if (queued === "queued") return;
       await this.lifecycle.runPrompt(implementBody, delivery, target, runOpts);
-      return;
-    }
-
-    const command = handleUserMessage({
-      projects: this.projects,
-      project,
-      getRunStatus: () => this.getRunStatus(),
-      stopProject: () => this.runners.stop(project.path),
-      stopAllRuns: () => {
-        this.runners.stopAll();
-      },
-      clearProjectQueue: () => this.queues.clear(project.path),
-      clearAllQueues: () => this.queues.clearAll(),
-      raw: trimmed,
-      conversations: this.conversations,
-      conversationKey: delivery.conversationKey,
-      surface: delivery.surface,
-    });
-
-    if (command.handled) {
-      if (command.reply) {
-        await delivery.reply(delivery.formatOutput(command.reply));
-      }
       return;
     }
 

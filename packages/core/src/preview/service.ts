@@ -30,20 +30,8 @@ export function parsePreviewPortsEnv(raw: string | null | undefined): PreviewPor
   return out;
 }
 
-/** Read optional `previewPorts` from projects.json (scan-shaped config only). */
-export function loadPreviewPorts(raw: unknown): PreviewPortsMap {
-  if (!raw || typeof raw !== "object") return {};
-  const obj = raw as Record<string, unknown>;
-  const hasScanShape =
-    Array.isArray(obj.dirs) ||
-    Array.isArray(obj.exclude) ||
-    obj.aliases != null ||
-    obj.previewPorts != null;
-  if (!hasScanShape) return {};
-
-  const ports = obj.previewPorts;
+function coercePreviewPorts(ports: unknown): PreviewPortsMap {
   if (!ports || typeof ports !== "object") return {};
-
   const out: PreviewPortsMap = {};
   for (const [key, value] of Object.entries(ports as Record<string, unknown>)) {
     const port =
@@ -57,6 +45,32 @@ export function loadPreviewPorts(raw: unknown): PreviewPortsMap {
     if (normalized) out[normalized] = port;
   }
   return out;
+}
+
+/** Read optional `previewPorts` from projects.json (flat or active devices.* section). */
+export function loadPreviewPorts(
+  raw: unknown,
+  opts: { host?: string | null } = {},
+): PreviewPortsMap {
+  if (!raw || typeof raw !== "object") return {};
+  const obj = raw as Record<string, unknown>;
+  const devices = obj.devices;
+  if (devices && typeof devices === "object") {
+    const host = (opts.host ?? "").trim().toLowerCase();
+    for (const [name, section] of Object.entries(devices as Record<string, unknown>)) {
+      if (name.toLowerCase() !== host || !section || typeof section !== "object") continue;
+      return coercePreviewPorts((section as { previewPorts?: unknown }).previewPorts);
+    }
+    return {};
+  }
+
+  const hasScanShape =
+    Array.isArray(obj.dirs) ||
+    Array.isArray(obj.exclude) ||
+    obj.aliases != null ||
+    obj.previewPorts != null;
+  if (!hasScanShape) return {};
+  return coercePreviewPorts(obj.previewPorts);
 }
 
 export function resolvePreviewPort(opts: {
@@ -183,6 +197,8 @@ export interface PreviewServiceOptions {
   defaultPort?: number;
   cloudflaredBin?: string;
   portsEnv?: string | null;
+  /** Selects devices.<host>.previewPorts when projects.json uses devices. */
+  bridgeHost?: string | null;
   tunnelManager?: CloudflareTunnelManager;
   devServers?: DevServerManager;
   probe?: (port: number) => Promise<boolean>;
@@ -240,7 +256,7 @@ export class PreviewService {
     try {
       if (!existsSync(this.opts.projectsFile)) return {};
       const raw = JSON.parse(readFileSync(this.opts.projectsFile, "utf8")) as unknown;
-      return loadPreviewPorts(raw);
+      return loadPreviewPorts(raw, { host: this.opts.bridgeHost });
     } catch {
       return {};
     }

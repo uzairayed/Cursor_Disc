@@ -3,21 +3,71 @@ import {
   type EnsureProjectChannelResult,
   ensureProjectChannel,
   type ProjectChannelRegistry,
+  sanitizeDiscordChannelName,
 } from "./project-channels.js";
 
 function isTextChannel(ch: GuildBasedChannel): boolean {
   return ch.type === ChannelType.GuildText || ch.type === ChannelType.GuildAnnouncement;
 }
 
-/** Discord.js-backed ensure: create or adopt a #project channel in the guild. */
+/** Discord category label from BRIDGE_HOST (same sanitize rules as channel names). */
+export function sanitizeDiscordCategoryName(host: string): string {
+  return sanitizeDiscordChannelName(host);
+}
+
+/** Find or create a guild category for this bridge host's project channels. */
+export async function ensureGuildCategory(guild: Guild, categoryName: string): Promise<string> {
+  const name = sanitizeDiscordCategoryName(categoryName);
+  const channels = await guild.channels.fetch();
+  for (const ch of channels.values()) {
+    if (ch && ch.type === ChannelType.GuildCategory && ch.name === name) {
+      return ch.id;
+    }
+  }
+  const created = await guild.channels.create({
+    name,
+    type: ChannelType.GuildCategory,
+    reason: `Cursor bridge device category: ${name}`,
+  });
+  return created.id;
+}
+
+async function moveChannelIntoCategory(
+  guild: Guild,
+  channelId: string,
+  categoryId: string,
+  projectKey: string,
+): Promise<void> {
+  try {
+    const ch = await guild.channels.fetch(channelId);
+    if (!ch || !isTextChannel(ch)) return;
+    if (ch.parentId === categoryId) return;
+    if (!("setParent" in ch) || typeof ch.setParent !== "function") return;
+    await ch.setParent(categoryId, {
+      reason: `Place project ${projectKey} under device category`,
+    });
+  } catch (err) {
+    console.warn(`[discord] could not move #${projectKey} into category:`, err);
+  }
+}
+
+/**
+ * Discord.js-backed ensure: create or adopt a #project channel in the guild,
+ * nested under a per-device category when `categoryName` (BRIDGE_HOST) is set.
+ */
 export async function ensureGuildProjectChannel(opts: {
   guild: Guild;
   projectKey: string;
   registry: ProjectChannelRegistry;
+  /** BRIDGE_HOST — Discord category that holds this machine's project channels. */
+  categoryName?: string | null;
 }): Promise<EnsureProjectChannelResult> {
   const { guild, projectKey, registry } = opts;
+  const categoryId = opts.categoryName?.trim()
+    ? await ensureGuildCategory(guild, opts.categoryName)
+    : null;
 
-  return ensureProjectChannel({
+  const result = await ensureProjectChannel({
     guildId: guild.id,
     projectKey,
     registry,
@@ -31,21 +81,39 @@ export async function ensureGuildProjectChannel(opts: {
     },
     findChannelByName: async (name) => {
       const channels = await guild.channels.fetch();
+      let uncategorized: { id: string; name: string } | null = null;
       for (const ch of channels.values()) {
-        if (ch && isTextChannel(ch) && ch.name === name) {
+        if (!ch || !isTextChannel(ch) || ch.name !== name) continue;
+        if (!categoryId) {
           return { id: ch.id, name: ch.name };
         }
+        // Prefer a channel already in this device category.
+        if (ch.parentId === categoryId) {
+          return { id: ch.id, name: ch.name };
+        }
+        // Adopt root-level leftovers (pre-category installs); never steal from
+        // another device's category.
+        if (ch.parentId == null && !uncategorized) {
+          uncategorized = { id: ch.id, name: ch.name };
+        }
       }
-      return null;
+      return uncategorized;
     },
     createChannel: async (name) => {
       const created = await guild.channels.create({
         name,
         type: ChannelType.GuildText,
+        parent: categoryId ?? undefined,
         topic: `Cursor project: ${projectKey}`,
         reason: `First-time selection of project ${projectKey}`,
       });
       return { id: created.id, name: created.name };
     },
   });
+
+  if (categoryId) {
+    await moveChannelIntoCategory(guild, result.channelId, categoryId, projectKey);
+  }
+
+  return result;
 }

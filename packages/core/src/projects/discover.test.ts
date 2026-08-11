@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { discoverProjectsFromDirs, loadProjectsConfig } from "./discover.js";
+import { discoverProjectsFromDirs, formatDevicePicker, loadProjectsConfig } from "./discover.js";
 
 function makeTree(): { root: string; a: string; b: string; skip: string } {
   const root = mkdtempSync(join(tmpdir(), "cwa-discover-"));
@@ -61,5 +61,45 @@ describe("loadProjectsConfig", () => {
     expect(found.cliproom).toBe(custom);
     expect(found.tagiser).toBe("/tmp/tagiser");
     expect(found.motocards).toBeUndefined();
+  });
+
+  it("loads only the matching devices.<host> section", () => {
+    const { root, a } = makeTree();
+    const found = loadProjectsConfig(
+      {
+        exclude: [],
+        devices: {
+          "windows-pc": { dirs: [root] },
+          macbook: { aliases: { other: "/tmp/other" } },
+        },
+      },
+      { host: "windows-pc" },
+    );
+    expect(found.cliproom).toBe(a);
+    expect(found.other).toBeUndefined();
+    expect(
+      loadProjectsConfig({ devices: { macbook: { aliases: { x: "/x" } } } }, { host: "pc" }),
+    ).toEqual({});
+  });
+});
+
+describe("formatDevicePicker", () => {
+  it("numbers only the active host's keys", () => {
+    const text = formatDevicePicker({
+      raw: {
+        devices: {
+          "windows-pc": { aliases: { motocards: "D:/p_projects/Motocards" } },
+          macbook: { aliases: { fleet: "/Users/YOU/fleet" } },
+        },
+      },
+      host: "windows-pc",
+      localKeys: ["general", "motocards"],
+    });
+    expect(text).toMatch(/\*\*windows-pc\*\* · this machine/);
+    expect(text).toMatch(/1\.\s*GENERAL/);
+    expect(text).toMatch(/2\.\s*MOTOCARDS/);
+    expect(text).toMatch(/\*\*macbook\*\*/);
+    expect(text).toMatch(/• FLEET/);
+    expect(text).not.toMatch(/1\.\s*FLEET/);
   });
 });

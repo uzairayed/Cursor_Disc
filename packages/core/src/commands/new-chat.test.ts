@@ -49,6 +49,7 @@ function setup() {
     cursorAskModel: null,
     cursorMaxConcurrent: 3,
     logPrompts: false,
+    bridgeHost: "test-host",
   };
   const projects = new ProjectStore(config);
   const conversations = new ConversationManager(config.historyDir);
