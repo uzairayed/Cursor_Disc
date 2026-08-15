@@ -82,6 +82,8 @@ describe("MessageRouter ask mode", () => {
 
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]![0]!.executionMode).toBe("ask");
+    expect(run.mock.calls[0]![0]!.prompt).toMatch(/sharp, calm teammate/);
+    expect(run.mock.calls[0]![0]!.prompt).toContain("What stack is this?");
     expect(replies.some((r) => /React app/i.test(r))).toBe(true);
   });
 

@@ -10,7 +10,12 @@ export { loadCoreConfig, ROOT_DIR } from "./config/index.js";
 export { isPlanApprovalEmoji } from "./orchestration/plan-first.js";
 export type { PreviewCommandResult } from "./preview/index.js";
 export { PreviewService } from "./preview/index.js";
-export { buildAgentPrompt, buildVoicePrompt } from "./prompts/agent-prompt.js";
+export {
+  buildAgentPrompt,
+  buildVoicePrompt,
+  DISCORD_AGENT_PREFIX,
+  withDiscordPrefix,
+} from "./prompts/agent-prompt.js";
 export { formatForDiscord } from "./utils/discord-format.js";
 export { purgeOldFiles } from "./utils/housekeeping.js";
 export { acquireProcessLock } from "./utils/process-lock.js";

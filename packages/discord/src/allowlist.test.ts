@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { effectiveAllowedChannelIds, isDiscordAuthorized, parseIdList } from "./allowlist.js";
+import {
+  effectiveAllowedChannelIds,
+  isDiscordAuthorized,
+  isDiscordChannelAllowed,
+  isDiscordIdentityAllowed,
+  parseIdList,
+} from "./allowlist.js";
 
 describe("parseIdList", () => {
   it("parses comma-separated snowflakes", () => {
@@ -154,6 +160,28 @@ describe("isDiscordAuthorized", () => {
         allowedGuildIds: ["guild-1"],
       }),
     ).toBe(false);
+  });
+});
+
+describe("isDiscordIdentityAllowed", () => {
+  const users = ["user-1"];
+  const base = {
+    userId: "user-1",
+    isBot: false,
+    isDm: false,
+    channelId: "other-chan",
+    allowedUserIds: users,
+    allowedChannelIds: ["chan-1"],
+  };
+
+  it("allows an allowlisted user even in an unknown channel", () => {
+    expect(isDiscordIdentityAllowed(base)).toBe(true);
+    expect(isDiscordChannelAllowed(base)).toBe(false);
+    expect(isDiscordAuthorized(base)).toBe(false);
+  });
+
+  it("denies strangers regardless of channel", () => {
+    expect(isDiscordIdentityAllowed({ ...base, userId: "stranger" })).toBe(false);
   });
 });
 

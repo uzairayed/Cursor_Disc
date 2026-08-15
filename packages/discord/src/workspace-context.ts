@@ -86,3 +86,25 @@ export function buildProjectLockedMessage(opts: {
   }
   return `This channel is **${here}** only. Open the **${want}** channel for that project.`;
 }
+
+/** Allowlisted user, but the channel belongs to another machine (or none here). */
+export function buildForeignDeviceMessage(opts: {
+  localHost: string;
+  remoteHost?: string | null;
+  projectKey?: string | null;
+}): string {
+  const local = opts.localHost;
+  if (opts.remoteHost) {
+    const where = opts.projectKey
+      ? `**${opts.projectKey.toUpperCase()}** lives on **${opts.remoteHost}**`
+      : `This channel belongs to **${opts.remoteHost}**`;
+    return [
+      `${where}, which is offline.`,
+      `This bridge is **${local}**. Bring that machine online and use \`/bridge take\` there.`,
+    ].join("\n");
+  }
+  return [
+    `This channel isn't available on **${local}**.`,
+    "If the project lives on another machine, bring it online and use `/bridge take` there.",
+  ].join("\n");
+}

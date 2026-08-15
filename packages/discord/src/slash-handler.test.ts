@@ -58,6 +58,7 @@ function mockProjects() {
       return null;
     }),
     list: vi.fn(() => ["cliproom", "crm", "fleet", "general"]),
+    deviceNames: vi.fn(() => ["windows-pc", "macbook"]),
   };
 }
 
@@ -93,7 +94,9 @@ function mockInteraction(opts: {
   bot?: boolean;
   channelType?: ChannelType;
   channelId?: string;
+  channelName?: string;
   parentId?: string | null;
+  categoryName?: string;
   guildId?: string | null;
   withGuild?: boolean;
   options?: Record<string, string | null>;
@@ -129,10 +132,16 @@ function mockInteraction(opts: {
     startThread: vi.fn(async () => thread),
   };
 
+  const category = opts.categoryName
+    ? { id: "cat-foreign", name: opts.categoryName, type: ChannelType.GuildCategory }
+    : null;
+
   const channel = {
     id: channelId,
+    name: opts.channelName ?? "general",
     type: opts.channelType ?? ChannelType.GuildText,
-    parentId: opts.parentId ?? null,
+    parentId: opts.parentId ?? category?.id ?? null,
+    parent: category,
     isThread: () => isThread,
     isTextBased: () => true,
     messages: {
@@ -475,5 +484,64 @@ describe("handleDiscordSlashCommand", () => {
       }),
       { executionMode: undefined, skipPlanFirst: false },
     );
+  });
+
+  it("stays silent on a foreign project channel when this host is standby", async () => {
+    const { interaction, replies } = mockInteraction({
+      commandName: "help",
+      channelId: "mac-fleet-chan",
+      channelName: "fleet",
+      categoryName: "macbook",
+    });
+    const router = mockRouter();
+    const lease = {
+      isOwner: () => false,
+      host: "windows-pc",
+      currentPayload: () => ({ host: "macbook" }),
+    };
+
+    await handleDiscordSlashCommand({
+      interaction: interaction as never,
+      config: baseConfig({
+        discordAllowedChannelIds: ["chan-1"],
+        bridgeHost: "windows-pc",
+      }),
+      router: router as never,
+      projectChannels: emptyRegistry(),
+      lease: lease as never,
+    });
+
+    expect(router.handle).not.toHaveBeenCalled();
+    expect(replies).toEqual([]);
+    expect(interaction.reply).not.toHaveBeenCalled();
+  });
+
+  it("explains an offline machine instead of unauthorized in that host's project channel", async () => {
+    const { interaction, replies } = mockInteraction({
+      commandName: "help",
+      channelId: "mac-fleet-chan",
+      channelName: "fleet",
+      categoryName: "macbook",
+    });
+    const router = mockRouter();
+
+    await handleDiscordSlashCommand({
+      interaction: interaction as never,
+      config: baseConfig({
+        discordAllowedChannelIds: ["chan-1"],
+        bridgeHost: "windows-pc",
+      }),
+      router: router as never,
+      projectChannels: emptyRegistry(),
+    });
+
+    expect(router.handle).not.toHaveBeenCalled();
+    expect(replies[0]?.content).not.toMatch(/not authorized/i);
+    expect(replies[0]).toMatchObject({
+      content: expect.stringMatching(/macbook/i),
+      ephemeral: true,
+    });
+    expect(replies[0]?.content).toMatch(/offline/i);
+    expect(replies[0]?.content).toMatch(/windows-pc/i);
   });
 });

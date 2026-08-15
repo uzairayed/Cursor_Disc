@@ -19,7 +19,8 @@ export interface DiscordAuthInput {
   allowedGuildIds?: readonly string[];
 }
 
-export function isDiscordAuthorized(input: DiscordAuthInput): boolean {
+/** User + guild only — channel allowlist is checked separately. */
+export function isDiscordIdentityAllowed(input: DiscordAuthInput): boolean {
   if (input.isBot) return false;
   if (!input.allowedUserIds.includes(input.userId)) return false;
   if (input.isDm) return true;
@@ -28,7 +29,11 @@ export function isDiscordAuthorized(input: DiscordAuthInput): boolean {
   if (guildIds.length > 0) {
     if (!input.guildId || !guildIds.includes(input.guildId)) return false;
   }
+  return true;
+}
 
+export function isDiscordChannelAllowed(input: DiscordAuthInput): boolean {
+  if (input.isDm) return true;
   if (input.allowedChannelIds.includes(input.channelId)) return true;
   if (
     input.isThread &&
@@ -38,6 +43,10 @@ export function isDiscordAuthorized(input: DiscordAuthInput): boolean {
     return true;
   }
   return false;
+}
+
+export function isDiscordAuthorized(input: DiscordAuthInput): boolean {
+  return isDiscordIdentityAllowed(input) && isDiscordChannelAllowed(input);
 }
 
 /** Merge static allowlist with auto-created project channels for a guild. */

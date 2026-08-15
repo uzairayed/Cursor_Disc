@@ -15,6 +15,34 @@ export function sanitizeDiscordCategoryName(host: string): string {
   return sanitizeDiscordChannelName(host);
 }
 
+/** Other device whose category this channel sits under, or null. */
+export function foreignDeviceFromCategory(
+  categoryName: string | null | undefined,
+  deviceNames: readonly string[],
+  localHost: string,
+): string | null {
+  if (!categoryName) return null;
+  const cat = sanitizeDiscordCategoryName(categoryName);
+  const local = sanitizeDiscordCategoryName(localHost);
+  if (!cat || cat === local) return null;
+  return deviceNames.find((name) => sanitizeDiscordCategoryName(name) === cat) ?? null;
+}
+
+export function categoryNameOfChannel(channel: {
+  isThread?: () => boolean;
+  name?: string | null;
+  parent?: { name?: string | null; parent?: { name?: string | null } | null } | null;
+} | null): { categoryName: string | null; channelName: string | null } {
+  if (!channel) return { categoryName: null, channelName: null };
+  if (channel.isThread?.()) {
+    return {
+      categoryName: channel.parent?.parent?.name ?? null,
+      channelName: channel.parent?.name ?? null,
+    };
+  }
+  return { categoryName: channel.parent?.name ?? null, channelName: channel.name ?? null };
+}
+
 /** Find or create a guild category for this bridge host's project channels. */
 export async function ensureGuildCategory(guild: Guild, categoryName: string): Promise<string> {
   const name = sanitizeDiscordCategoryName(categoryName);

@@ -16,10 +16,19 @@ import {
   type OmitPartialGroupDMChannel,
   Partials,
 } from "discord.js";
-import { effectiveAllowedChannelIds, isDiscordAuthorized } from "./allowlist.js";
+import {
+  effectiveAllowedChannelIds,
+  isDiscordAuthorized,
+  isDiscordChannelAllowed,
+  isDiscordIdentityAllowed,
+} from "./allowlist.js";
 import { BridgeLeaseManager } from "./bridge-lease.js";
 import type { DiscordConfig } from "./config.js";
-import { ensureGuildProjectChannel } from "./ensure-project-channel-discord.js";
+import {
+  categoryNameOfChannel,
+  ensureGuildProjectChannel,
+  foreignDeviceFromCategory,
+} from "./ensure-project-channel-discord.js";
 import { isBotDirectlyMentioned, stripBotMentions } from "./mentions.js";
 import { resolveMessageContext } from "./message-context.js";
 import { resolvePlanApprovalReaction } from "./plan-reaction.js";
@@ -31,6 +40,7 @@ import { resolveReplyDestination } from "./reply-destination.js";
 import { isAllowedAttachment, saveDiscordAttachment } from "./save-attachment.js";
 import { handleDiscordSlashCommand } from "./slash-handler.js";
 import {
+  buildForeignDeviceMessage,
   buildGeneralModeBanner,
   buildProjectLockedMessage,
   buildProjectModeBanner,
@@ -216,21 +226,59 @@ export async function handleDiscordMessage(opts: {
   // Bot/self messages — ignore quietly (no log spam).
   if (ctx.isBot) return;
 
-  if (
-    !isDiscordAuthorized({
-      userId: ctx.userId,
-      isBot: ctx.isBot,
-      isDm: ctx.isDm,
-      channelId: ctx.channelId,
-      guildId: ctx.guildId,
-      parentChannelId: ctx.parentChannelId,
-      isThread: ctx.isThread,
-      allowedUserIds: config.discordAllowedUserIds,
-      allowedChannelIds,
-      allowedGuildIds: config.discordAllowedGuildIds,
-    })
-  ) {
+  const authInput = {
+    userId: ctx.userId,
+    isBot: ctx.isBot,
+    isDm: ctx.isDm,
+    channelId: ctx.channelId,
+    guildId: ctx.guildId,
+    parentChannelId: ctx.parentChannelId,
+    isThread: ctx.isThread,
+    allowedUserIds: config.discordAllowedUserIds,
+    allowedChannelIds,
+    allowedGuildIds: config.discordAllowedGuildIds,
+  };
+
+  if (!isDiscordIdentityAllowed(authInput)) {
     console.log(`[discord] skip unauthorized user=${ctx.userId} channel=${ctx.channelId}`);
+    return;
+  }
+
+  if (!isDiscordChannelAllowed(authInput)) {
+    if (lease && !lease.isOwner()) {
+      console.log(
+        `[discord] skip standby foreign channel host=${lease.host} user=${ctx.userId} channel=${ctx.channelId}`,
+      );
+      return;
+    }
+    const botUserId = message.client?.user?.id ?? null;
+    const mentionedUserIds = message.mentions?.users ? [...message.mentions.users.keys()] : null;
+    if (
+      !isBotDirectlyMentioned({
+        isDm: ctx.isDm,
+        isThread: ctx.isThread,
+        botUserId,
+        mentionedUserIds,
+        content: message.content,
+      })
+    ) {
+      return;
+    }
+    const { categoryName, channelName } = categoryNameOfChannel(message.channel);
+    const remoteHost = foreignDeviceFromCategory(
+      categoryName,
+      router.projects.deviceNames(),
+      config.bridgeHost,
+    );
+    const content = buildForeignDeviceMessage({
+      localHost: config.bridgeHost,
+      remoteHost,
+      projectKey: channelName && channelName !== "general" ? channelName : null,
+    });
+    console.log(
+      `[discord] skip foreign-device user=${ctx.userId} channel=${ctx.channelId} remote=${remoteHost ?? "?"}`,
+    );
+    await message.reply(discordProfile.formatOutput(content));
     return;
   }
 
