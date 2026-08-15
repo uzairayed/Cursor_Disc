@@ -28,11 +28,13 @@ export function foreignDeviceFromCategory(
   return deviceNames.find((name) => sanitizeDiscordCategoryName(name) === cat) ?? null;
 }
 
-export function categoryNameOfChannel(channel: {
-  isThread?: () => boolean;
-  name?: string | null;
-  parent?: { name?: string | null; parent?: { name?: string | null } | null } | null;
-} | null): { categoryName: string | null; channelName: string | null } {
+export function categoryNameOfChannel(
+  channel: {
+    isThread?: () => boolean;
+    name?: string | null;
+    parent?: { name?: string | null; parent?: { name?: string | null } | null } | null;
+  } | null,
+): { categoryName: string | null; channelName: string | null } {
   if (!channel) return { categoryName: null, channelName: null };
   if (channel.isThread?.()) {
     return {
