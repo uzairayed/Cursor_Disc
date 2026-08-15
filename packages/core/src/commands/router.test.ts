@@ -6,7 +6,13 @@ import { discordProfile } from "../channels/profiles.js";
 import type { DeliveryContext } from "../channels/types.js";
 import type { AppConfig } from "../config/index.js";
 import type { CursorRunOptions, CursorRunResult } from "../cursor/runner.js";
+import { DISCORD_AGENT_PREFIX } from "../prompts/agent-prompt.js";
 import { MessageRouter } from "./router.js";
+
+function userPrompt(prefixed: string): string {
+  const lead = `${DISCORD_AGENT_PREFIX}\n\n`;
+  return prefixed.startsWith(lead) ? prefixed.slice(lead.length) : prefixed;
+}
 
 function idleResult(overrides: Partial<CursorRunResult> = {}): CursorRunResult {
   return {
@@ -200,8 +206,9 @@ describe("MessageRouter", () => {
     const threadBReplies: string[] = [];
 
     mockRunAcquired(router, async (opts) => {
-      prompts.push(opts.prompt);
-      return idleResult({ stdout: `done:${opts.prompt}` });
+      const text = userPrompt(opts.prompt);
+      prompts.push(text);
+      return idleResult({ stdout: `done:${text}` });
     });
 
     router.runners.markRunning(workspace, "crm");

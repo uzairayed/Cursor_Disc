@@ -5,6 +5,7 @@ import { ChannelType } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   ensureGuildProjectChannel,
+  foreignDeviceFromCategory,
   sanitizeDiscordCategoryName,
 } from "./ensure-project-channel-discord.js";
 import { ProjectChannelRegistry } from "./project-channels.js";
@@ -18,6 +19,20 @@ describe("sanitizeDiscordCategoryName", () => {
   it("matches channel-name rules", () => {
     expect(sanitizeDiscordCategoryName("windows-pc")).toBe("windows-pc");
     expect(sanitizeDiscordCategoryName("Mac Book")).toBe("mac-book");
+  });
+});
+
+describe("foreignDeviceFromCategory", () => {
+  const devices = ["windows-pc", "macbook"];
+
+  it("returns the other device when the category matches", () => {
+    expect(foreignDeviceFromCategory("macbook", devices, "windows-pc")).toBe("macbook");
+  });
+
+  it("ignores this machine's own category and unknown names", () => {
+    expect(foreignDeviceFromCategory("windows-pc", devices, "windows-pc")).toBeNull();
+    expect(foreignDeviceFromCategory("random", devices, "windows-pc")).toBeNull();
+    expect(foreignDeviceFromCategory(null, devices, "windows-pc")).toBeNull();
   });
 });
 

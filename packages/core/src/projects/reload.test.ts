@@ -59,4 +59,18 @@ describe("ProjectStore live reload", () => {
     expect(resolved?.key).toBe("fleet");
     expect(resolved?.path).toBe(fleet);
   });
+
+  it("lists device names from a devices config", () => {
+    const { store, projectsFile, root } = setup();
+    writeFileSync(
+      projectsFile,
+      JSON.stringify({
+        devices: {
+          "windows-pc": { aliases: { crm: join(root, "crm") } },
+          macbook: { aliases: { fleet: "/tmp/fleet" } },
+        },
+      }),
+    );
+    expect(store.deviceNames()).toEqual(["macbook", "windows-pc"]);
+  });
 });

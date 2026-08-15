@@ -10,10 +10,18 @@ import {
   type Message,
   ThreadAutoArchiveDuration,
 } from "discord.js";
-import { effectiveAllowedChannelIds, isDiscordAuthorized } from "./allowlist.js";
+import {
+  effectiveAllowedChannelIds,
+  isDiscordChannelAllowed,
+  isDiscordIdentityAllowed,
+} from "./allowlist.js";
 import type { BridgeLeaseManager } from "./bridge-lease.js";
 import type { DiscordConfig } from "./config.js";
-import { ensureGuildProjectChannel } from "./ensure-project-channel-discord.js";
+import {
+  categoryNameOfChannel,
+  ensureGuildProjectChannel,
+  foreignDeviceFromCategory,
+} from "./ensure-project-channel-discord.js";
 import { runPreviewSlashCommand } from "./preview-handler.js";
 import type { ProjectChannelRegistry } from "./project-channels.js";
 import { threadNameForPrompt } from "./reply-destination.js";
@@ -21,6 +29,7 @@ import { promptFromSlashCommand } from "./slash-commands.js";
 import { createSlashDelivery } from "./slash-delivery.js";
 import { handleVoiceSlashCommand } from "./voice/handler.js";
 import {
+  buildForeignDeviceMessage,
   buildGeneralModeBanner,
   buildProjectLockedMessage,
   buildProjectModeBanner,
@@ -89,20 +98,20 @@ export async function handleDiscordSlashCommand(opts: {
     projectChannels.channelIdsForGuild(ctx.guildId),
   );
 
-  if (
-    !isDiscordAuthorized({
-      userId: ctx.userId,
-      isBot: ctx.isBot,
-      isDm: ctx.isDm,
-      channelId: ctx.channelId,
-      guildId: ctx.guildId,
-      parentChannelId: ctx.parentChannelId,
-      isThread: ctx.isThread,
-      allowedUserIds: config.discordAllowedUserIds,
-      allowedChannelIds,
-      allowedGuildIds: config.discordAllowedGuildIds,
-    })
-  ) {
+  const authInput = {
+    userId: ctx.userId,
+    isBot: ctx.isBot,
+    isDm: ctx.isDm,
+    channelId: ctx.channelId,
+    guildId: ctx.guildId,
+    parentChannelId: ctx.parentChannelId,
+    isThread: ctx.isThread,
+    allowedUserIds: config.discordAllowedUserIds,
+    allowedChannelIds,
+    allowedGuildIds: config.discordAllowedGuildIds,
+  };
+
+  if (!isDiscordIdentityAllowed(authInput)) {
     console.log(`[discord] skip unauthorized slash /${interaction.commandName} user=${ctx.userId}`);
     await unauthorizedReply(interaction);
     return;
@@ -110,6 +119,35 @@ export async function handleDiscordSlashCommand(opts: {
 
   if (interaction.commandName === "bridge") {
     await handleBridgeSlashCommand({ interaction, lease });
+    return;
+  }
+
+  if (!isDiscordChannelAllowed(authInput)) {
+    if (lease && !lease.isOwner()) {
+      console.log(
+        `[discord] skip standby foreign channel host=${lease.host} user=${ctx.userId} channel=${ctx.channelId}`,
+      );
+      return;
+    }
+    const { categoryName, channelName } = categoryNameOfChannel(interaction.channel);
+    const remoteHost = foreignDeviceFromCategory(
+      categoryName,
+      router.projects.deviceNames(),
+      config.bridgeHost,
+    );
+    const content = buildForeignDeviceMessage({
+      localHost: config.bridgeHost,
+      remoteHost,
+      projectKey: channelName && channelName !== "general" ? channelName : null,
+    });
+    console.log(
+      `[discord] skip foreign-device slash /${interaction.commandName} user=${ctx.userId} channel=${ctx.channelId} remote=${remoteHost ?? "?"}`,
+    );
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content, ephemeral: true });
+    } else {
+      await interaction.reply({ content, ephemeral: true });
+    }
     return;
   }
 

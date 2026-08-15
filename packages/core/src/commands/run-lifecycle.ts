@@ -17,6 +17,7 @@ import {
   shouldPlanFirst,
 } from "../orchestration/plan-first.js";
 import type { ProjectStore } from "../projects/index.js";
+import { withDiscordPrefix } from "../prompts/agent-prompt.js";
 import { splitMessage } from "../utils/split.js";
 import type { DirectoryQueues } from "./directory-queues.js";
 import { sessionStorageKey } from "./index.js";
@@ -313,7 +314,7 @@ export class RunLifecycle {
       const result = await this.runners.runAcquired({
         cursorBin: this.config.cursorBin,
         workspace,
-        prompt: cursorPrompt,
+        prompt: withDiscordPrefix(cursorPrompt),
         projectKey,
         sessionKey: storageKey,
         conversations: this.conversations,

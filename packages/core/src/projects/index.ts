@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { type AppConfig, resolveProjectPath } from "../config/index.js";
 import type { PendingLargePrompt, PendingPlan } from "../orchestration/plan-first.js";
-import { formatDevicePicker, loadProjectsConfig, type ProjectsMap } from "./discover.js";
+import {
+  deviceNames as deviceNamesFromConfig,
+  formatDevicePicker,
+  loadProjectsConfig,
+  type ProjectsMap,
+} from "./discover.js";
 
 export type { PendingLargePrompt, PendingPlan, ProjectsMap };
 
@@ -107,6 +112,12 @@ export class ProjectStore {
       host: this.config.bridgeHost,
       localKeys: this.list(),
     });
+  }
+
+  /** Host names from `devices` in projects.json (empty when using a flat map). */
+  deviceNames(): string[] {
+    this.reload();
+    return deviceNamesFromConfig(this.rawFile);
   }
 
   /** Reverse lookup: which project key owns this absolute workspace path? */

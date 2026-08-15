@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ProjectChannelRegistry } from "./project-channels.js";
 import {
+  buildForeignDeviceMessage,
   buildProjectLockedMessage,
   buildProjectRedirectMessage,
   resolveWorkspaceContext,
@@ -86,5 +87,18 @@ describe("UX copy", () => {
         requestedChannelId: "222",
       }),
     ).toMatch(/<#222>/);
+  });
+
+  it("names the offline host when a channel belongs to another machine", () => {
+    const text = buildForeignDeviceMessage({
+      localHost: "windows-pc",
+      remoteHost: "macbook",
+      projectKey: "fleet",
+    });
+    expect(text).toMatch(/FLEET/);
+    expect(text).toMatch(/macbook/);
+    expect(text).toMatch(/offline/);
+    expect(text).toMatch(/windows-pc/);
+    expect(text).not.toMatch(/not authorized/i);
   });
 });

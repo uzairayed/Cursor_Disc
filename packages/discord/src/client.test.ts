@@ -58,6 +58,7 @@ function mockProjects() {
       return null;
     }),
     list: vi.fn(() => ["cliproom", "crm", "fleet", "general"]),
+    deviceNames: vi.fn(() => ["windows-pc", "macbook"]),
   };
 }
 
@@ -95,7 +96,9 @@ function mockMessage(opts: {
   bot?: boolean;
   channelType?: ChannelType;
   channelId?: string;
+  channelName?: string;
   parentId?: string | null;
+  categoryName?: string;
   guildId?: string | null;
   withGuild?: boolean;
   /** When false, omit bot mention (guild messages will be ignored). */
@@ -130,10 +133,15 @@ function mockMessage(opts: {
       return {};
     }),
   };
+  const category = opts.categoryName
+    ? { id: "cat-foreign", name: opts.categoryName, type: ChannelType.GuildCategory }
+    : null;
   const channel = {
     id: channelId,
+    name: opts.channelName ?? "general",
     type: opts.channelType ?? ChannelType.GuildText,
-    parentId: opts.parentId ?? null,
+    parentId: opts.parentId ?? category?.id ?? null,
+    parent: category,
     isThread: () => isThread,
     isDMBased: () => isDm,
     send: vi.fn(async (text: string) => {
@@ -184,6 +192,29 @@ function mockMessage(opts: {
 describe("handleDiscordMessage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("explains an offline machine instead of ignoring a foreign project channel", async () => {
+    const { message, sends } = mockMessage({
+      content: "help",
+      channelId: "mac-fleet-chan",
+      channelName: "fleet",
+      categoryName: "macbook",
+    });
+    const router = mockRouter();
+    await handleDiscordMessage({
+      message: message as never,
+      config: baseConfig({
+        discordAllowedChannelIds: ["chan-1"],
+        bridgeHost: "windows-pc",
+      }),
+      router: router as never,
+      projectChannels: emptyRegistry(),
+    });
+    expect(router.handle).not.toHaveBeenCalled();
+    expect(sends.join("\n")).toMatch(/macbook/i);
+    expect(sends.join("\n")).toMatch(/offline/i);
+    expect(sends.join("\n")).not.toMatch(/not authorized/i);
   });
 
   it("ignores unauthorized users", async () => {

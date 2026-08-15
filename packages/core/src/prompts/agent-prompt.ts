@@ -1,3 +1,16 @@
+/** Discord-only identity. Applied at spawn, not as a workspace rule. */
+export const DISCORD_AGENT_PREFIX = [
+  'Be a sharp, calm teammate: useful bit first, no "Sure!" or recap.',
+  "Chat: a few lines. Plans: structured but tight. After edits: what changed, not a tour.",
+  "Never mention the chat channel, Discord, the IDE, or that you are a remote agent.",
+].join("\n");
+
+export function withDiscordPrefix(prompt: string): string {
+  const body = prompt.trim();
+  if (!body || body.startsWith(DISCORD_AGENT_PREFIX)) return body;
+  return `${DISCORD_AGENT_PREFIX}\n\n${body}`;
+}
+
 /** Prefix a Whisper transcript so Cursor knows it came from a voice note. */
 export function buildVoicePrompt(transcript: string, caption?: string | null): string {
   const parts = ["(voice note)", transcript.trim()];

@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, buildVoicePrompt } from "./agent-prompt.js";
+import {
+  buildAgentPrompt,
+  buildVoicePrompt,
+  DISCORD_AGENT_PREFIX,
+  withDiscordPrefix,
+} from "./agent-prompt.js";
+
+describe("withDiscordPrefix", () => {
+  it("prepends the Discord identity once", () => {
+    const out = withDiscordPrefix("fix login");
+    expect(out.startsWith(DISCORD_AGENT_PREFIX)).toBe(true);
+    expect(out.endsWith("fix login")).toBe(true);
+    expect(withDiscordPrefix(out)).toBe(out);
+  });
+
+  it("leaves blank prompts alone", () => {
+    expect(withDiscordPrefix("")).toBe("");
+    expect(withDiscordPrefix("   ")).toBe("");
+  });
+});
 
 describe("buildVoicePrompt", () => {
   it("prefixes the transcript", () => {
