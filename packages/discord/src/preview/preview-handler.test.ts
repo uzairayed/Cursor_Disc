@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DiscordConfig } from "./config.js";
+import type { DiscordConfig } from "../config.js";
 import {
   createPreviewService,
   parsePreviewTextCommand,

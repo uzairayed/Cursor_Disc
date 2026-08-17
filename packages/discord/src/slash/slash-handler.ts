@@ -14,20 +14,17 @@ import {
   effectiveAllowedChannelIds,
   isDiscordChannelAllowed,
   isDiscordIdentityAllowed,
-} from "./allowlist.js";
-import type { BridgeLeaseManager } from "./bridge-lease.js";
-import type { DiscordConfig } from "./config.js";
+} from "../allowlist.js";
+import type { BridgeLeaseManager } from "../bridge-lease.js";
+import type { DiscordConfig } from "../config.js";
+import { threadNameForPrompt } from "../message/reply-destination.js";
+import { runPreviewSlashCommand } from "../preview/preview-handler.js";
 import {
   categoryNameOfChannel,
   ensureGuildProjectChannel,
   foreignDeviceFromCategory,
-} from "./ensure-project-channel-discord.js";
-import { runPreviewSlashCommand } from "./preview-handler.js";
-import type { ProjectChannelRegistry } from "./project-channels.js";
-import { threadNameForPrompt } from "./reply-destination.js";
-import { promptFromSlashCommand } from "./slash-commands.js";
-import { createSlashDelivery } from "./slash-delivery.js";
-import { handleVoiceSlashCommand } from "./voice/handler.js";
+} from "../projects/ensure-project-channel-discord.js";
+import type { ProjectChannelRegistry } from "../projects/project-channels.js";
 import {
   buildForeignDeviceMessage,
   buildGeneralModeBanner,
@@ -35,7 +32,10 @@ import {
   buildProjectModeBanner,
   buildProjectRedirectMessage,
   resolveWorkspaceContext,
-} from "./workspace-context.js";
+} from "../projects/workspace-context.js";
+import { handleVoiceSlashCommand } from "../voice/handler.js";
+import { promptFromSlashCommand } from "./slash-commands.js";
+import { createSlashDelivery } from "./slash-delivery.js";
 
 async function resolveInteractionContext(interaction: ChatInputCommandInteraction): Promise<{
   userId: string;

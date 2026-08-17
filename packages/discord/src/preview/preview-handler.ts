@@ -1,6 +1,6 @@
 import { type PreviewCommandResult, PreviewService } from "@cursor-bridge/core";
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { DiscordConfig } from "./config.js";
+import type { DiscordConfig } from "../config.js";
 
 export function createPreviewService(config: DiscordConfig): PreviewService {
   return new PreviewService({
