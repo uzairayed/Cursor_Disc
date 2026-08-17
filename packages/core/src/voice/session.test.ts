@@ -17,6 +17,23 @@ const base = {
 };
 
 describe("VoiceSession", () => {
+  it("accepts any speaker when * is set", async () => {
+    const speak = vi.fn(async () => undefined);
+    const transcribe = vi.fn(async () => "what time is it");
+    const session = new VoiceSession({
+      allowedUserIds: ["*"],
+      speak,
+      transcribe,
+      now: () => new Date("2026-07-29T12:00:00Z"),
+      ...base,
+    });
+
+    await session.onPcm("stranger", pcmLoud());
+    await session.flushUser("stranger");
+    await flushCoalesce();
+    expect(transcribe).toHaveBeenCalled();
+  });
+
   it("ignores audio from non-allowlisted users", async () => {
     const speak = vi.fn(async () => undefined);
     const transcribe = vi.fn(async () => "what time is it");

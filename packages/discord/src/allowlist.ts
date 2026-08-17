@@ -1,9 +1,28 @@
+/** `DISCORD_ALLOWED_USER_IDS=*` — any non-bot user in an allowlisted guild/channel. */
+export const PUBLIC_USER_SENTINEL = "*";
+
 export function parseIdList(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   return raw
     .split(",")
     .map((id) => id.trim())
     .filter(Boolean);
+}
+
+export function isPublicUserAllowlist(allowedUserIds: readonly string[]): boolean {
+  return allowedUserIds.includes(PUBLIC_USER_SENTINEL);
+}
+
+export function explicitAllowedUserIds(allowedUserIds: readonly string[]): string[] {
+  return allowedUserIds.filter((id) => id !== PUBLIC_USER_SENTINEL);
+}
+
+/** Voice / per-user checks: `*` means any speaker. */
+export function isAllowedDiscordUser(
+  userId: string,
+  allowedUserIds: readonly string[],
+): boolean {
+  return isPublicUserAllowlist(allowedUserIds) || allowedUserIds.includes(userId);
 }
 
 export interface DiscordAuthInput {
@@ -22,8 +41,14 @@ export interface DiscordAuthInput {
 /** User + guild only — channel allowlist is checked separately. */
 export function isDiscordIdentityAllowed(input: DiscordAuthInput): boolean {
   if (input.isBot) return false;
-  if (!input.allowedUserIds.includes(input.userId)) return false;
-  if (input.isDm) return true;
+
+  const explicit = explicitAllowedUserIds(input.allowedUserIds);
+  const isListed = explicit.includes(input.userId);
+  const isPublic = isPublicUserAllowlist(input.allowedUserIds);
+  // `*` opens guild/channel traffic, not DMs — strangers messaging the bot
+  // must not be able to drive Cursor on the host machine.
+  if (input.isDm) return isListed;
+  if (!isListed && !isPublic) return false;
 
   const guildIds = input.allowedGuildIds ?? [];
   if (guildIds.length > 0) {
@@ -39,6 +64,14 @@ export function isDiscordChannelAllowed(input: DiscordAuthInput): boolean {
     input.isThread &&
     input.parentChannelId &&
     input.allowedChannelIds.includes(input.parentChannelId)
+  ) {
+    return true;
+  }
+  // Public + guild-scoped with no channel list: any channel in those guilds.
+  if (
+    input.allowedChannelIds.length === 0 &&
+    isPublicUserAllowlist(input.allowedUserIds) &&
+    (input.allowedGuildIds?.length ?? 0) > 0
   ) {
     return true;
   }
@@ -58,11 +91,25 @@ export function effectiveAllowedChannelIds(
 }
 
 /** Fail closed: refuse to start when nobody is allowlisted. */
-export function assertDiscordAllowlistConfigured(allowedUserIds: string[]): void {
+export function assertDiscordAllowlistConfigured(
+  allowedUserIds: string[],
+  allowedChannelIds: string[] = [],
+  allowedGuildIds: string[] = [],
+): void {
   if (allowedUserIds.length === 0) {
     throw new Error(
       "DISCORD_ALLOWED_USER_IDS is empty — refusing to start. " +
-        "Set at least one owner Discord user ID so arbitrary senders cannot drive Cursor.",
+        "Set at least one owner Discord user ID, or * plus a guild/channel list.",
+    );
+  }
+  if (
+    isPublicUserAllowlist(allowedUserIds) &&
+    allowedChannelIds.length === 0 &&
+    allowedGuildIds.length === 0
+  ) {
+    throw new Error(
+      "DISCORD_ALLOWED_USER_IDS=* is public — also set DISCORD_ALLOWED_GUILD_IDS " +
+        "or DISCORD_ALLOWED_CHANNEL_IDS so random DMs cannot drive Cursor.",
     );
   }
 }

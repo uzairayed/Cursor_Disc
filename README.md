@@ -34,7 +34,7 @@ Each channel message usually opens a thread; keep talking there to continue the 
 
 Large prompts get held first; reply `plan` or `run`. Images and voice notes work if `OPENAI_API_KEY` is set.
 
-Only allowlisted users (and channels, if you set them) can talk to the bot. Details in SETUP.
+Only allowlisted users (and channels, if you set them) can talk to the bot. Set `DISCORD_ALLOWED_USER_IDS=*` plus a guild or channel list to open it to a server. Details in SETUP.
 
 ## Optional extras
 

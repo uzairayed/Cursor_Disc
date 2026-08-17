@@ -73,20 +73,24 @@ export class VoiceSession {
     this.mode = on ? "open" : "closed";
   }
 
+  private isAllowedSpeaker(userId: string): boolean {
+    return this.allowed.has("*") || this.allowed.has(userId);
+  }
+
   async onPcm(userId: string, pcm: Buffer): Promise<void> {
-    if (!this.allowed.has(userId) || this.mode === "closed") return;
+    if (this.mode === "closed" || !this.isAllowedSpeaker(userId)) return;
     this.queue.push({ userId, pcm });
     await this.drain();
   }
 
   async ingestUtterance(userId: string, pcm: Buffer): Promise<void> {
-    if (!this.allowed.has(userId) || this.mode === "closed") return;
+    if (!this.isAllowedSpeaker(userId) || this.mode === "closed") return;
     if (pcm.byteLength < 2) return;
     await this.handleUtterance(pcm);
   }
 
   async flushUser(userId: string): Promise<void> {
-    if (!this.allowed.has(userId) || this.mode === "closed") return;
+    if (!this.isAllowedSpeaker(userId) || this.mode === "closed") return;
     const vad = this.vads.get(userId);
     if (!vad) return;
     const segment = vad.flush();

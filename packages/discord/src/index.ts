@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { acquireProcessLock, MessageRouter, purgeOldFiles } from "@cursor-bridge/core";
+import { isPublicUserAllowlist } from "./allowlist.js";
 import { startDiscordBridge } from "./client.js";
 import { loadDiscordConfig } from "./config.js";
 import { createPreviewService } from "./preview/preview-handler.js";
@@ -18,7 +19,11 @@ async function main(): Promise<void> {
   console.log("Cursor Discord Bridge v1.0");
   console.log(`Projects file: ${config.projectsFile}`);
   console.log(`Cursor binary: ${config.cursorBin}`);
-  console.log(`Owner allowlist: ${config.discordAllowedUserIds.join(", ")}`);
+  console.log(
+    isPublicUserAllowlist(config.discordAllowedUserIds)
+      ? "Owner allowlist: * (public — any user in allowlisted guilds/channels; DMs still need an explicit user ID)"
+      : `Owner allowlist: ${config.discordAllowedUserIds.join(", ")}`,
+  );
   if (config.discordAllowedGuildIds.length > 0) {
     console.log(`Guild allowlist: ${config.discordAllowedGuildIds.join(", ")}`);
   }

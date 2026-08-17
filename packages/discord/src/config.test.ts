@@ -33,6 +33,37 @@ describe("loadDiscordConfig", () => {
     expect(() => loadDiscordConfig(root)).toThrow(/DISCORD_ALLOWED_USER_IDS/);
   });
 
+  it("fails closed when * has no guild or channel list", () => {
+    const root = mkdtempSync(join(tmpdir(), "cdc-cfg-"));
+    writeFileSync(
+      join(root, ".env"),
+      "DISCORD_BOT_TOKEN=secret-token\nDISCORD_ALLOWED_USER_IDS=*\n",
+    );
+    delete process.env.DISCORD_BOT_TOKEN;
+    delete process.env.DISCORD_ALLOWED_USER_IDS;
+    delete process.env.DISCORD_ALLOWED_GUILD_IDS;
+    delete process.env.DISCORD_ALLOWED_CHANNEL_IDS;
+    expect(() => loadDiscordConfig(root)).toThrow(/DISCORD_ALLOWED_USER_IDS=\*/);
+  });
+
+  it("loads public * with a guild allowlist", () => {
+    const root = mkdtempSync(join(tmpdir(), "cdc-cfg-"));
+    writeFileSync(
+      join(root, ".env"),
+      [
+        "DISCORD_BOT_TOKEN=secret-token",
+        "DISCORD_ALLOWED_USER_IDS=*",
+        "DISCORD_ALLOWED_GUILD_IDS=444",
+      ].join("\n"),
+    );
+    delete process.env.DISCORD_BOT_TOKEN;
+    delete process.env.DISCORD_ALLOWED_USER_IDS;
+    delete process.env.DISCORD_ALLOWED_GUILD_IDS;
+    const cfg = loadDiscordConfig(root);
+    expect(cfg.discordAllowedUserIds).toEqual(["*"]);
+    expect(cfg.discordAllowedGuildIds).toEqual(["444"]);
+  });
+
   it("loads token and allowlists from env file", () => {
     const root = mkdtempSync(join(tmpdir(), "cdc-cfg-"));
     writeFileSync(

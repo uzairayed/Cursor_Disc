@@ -89,6 +89,8 @@ Threads under an allowlisted parent channel work automatically.
 
 Without a bot token or user allowlist, the process refuses to start.
 
+**Public (anyone in your server):** set `DISCORD_ALLOWED_USER_IDS=*` and at least one guild (or channel) ID. DMs stay closed unless you also list specific user IDs. See [Make it public](#make-it-public).
+
 ---
 
 ## 5. Point it at your projects
@@ -203,9 +205,47 @@ If slash commands don’t appear: re-invite with the `applications.commands` sco
 
 ---
 
+## Make it public
+
+Two separate switches. You usually want both if strangers should be able to *invite* the bot **and** *use* it.
+
+### 1. Discord: let others add the bot
+
+In the [Developer Portal](https://discord.com/developers/applications) → your app → **Bot**:
+
+1. Turn **Public Bot** ON (Authorization Flow). Off means only you can add it to servers.
+2. Keep **Message Content Intent** ON.
+3. Re-copy the OAuth2 invite URL (`bot` + `applications.commands`) and share it if others should install it.
+
+This only controls who can *invite*. It does not change who the bridge will listen to.
+
+### 2. Bridge: let anyone in a server talk to it
+
+The process still refuses an empty user list. To open it:
+
+```env
+DISCORD_ALLOWED_USER_IDS=*
+DISCORD_ALLOWED_GUILD_IDS=your-server-id
+# optional: pin it to specific channels instead of the whole server
+# DISCORD_ALLOWED_CHANNEL_IDS=channel-id-1,channel-id-2
+```
+
+| Setting | Who can use the bot |
+|---|---|
+| `USER_IDS=you` (default) | Only you, in DMs and listed channels |
+| `USER_IDS=*` + guild ID, no channel list | Anyone in that server, any channel |
+| `USER_IDS=*` + channel IDs | Anyone in those channels |
+| `USER_IDS=*,you` + guild ID | Anyone in the server; **you** can still DM |
+
+`*` does **not** open DMs. Random people messaging the bot cannot drive Cursor.
+
+If you want the bot on *other people's* servers, add each guild ID to `DISCORD_ALLOWED_GUILD_IDS` (or they cannot talk to it). Slash commands register instantly on those guilds.
+
+---
+
 ## Security notes (read once)
 
-- **Trust boundary:** anyone in `DISCORD_ALLOWED_USER_IDS` can run Cursor Agent in every configured project. Runs pass `--trust` to the Cursor CLI, so treat the allowlist as "people you'd hand your laptop to". Keep it to yourself unless you mean otherwise.
+- **Trust boundary:** anyone in `DISCORD_ALLOWED_USER_IDS` (or anyone, if you set `*`) can run Cursor Agent in every configured project. Runs pass `--trust` to the Cursor CLI, so treat the allowlist as "people you'd hand your laptop to". Keep it to yourself unless you mean otherwise.
 - **Prompt privacy:** by default, run logs (`logs/*.jsonl`) and the console record prompt *length*, not text. Set `LOG_PROMPTS=true` only while debugging.
 - **`/preview` is public:** the tunnel URL (`*.trycloudflare.com`) is reachable by anyone who has it while the tunnel is up. Use `/preview_stop` when done, and don't preview apps with sensitive data.
 - **Attachments:** images/audio only, 25 MB cap, saved under `history/inbox/` with generated names.
@@ -218,7 +258,9 @@ If slash commands don’t appear: re-invite with the `applications.commands` sco
 | Problem | Fix |
 |---|---|
 | Crashes on start: empty token / allowlist | Fill `DISCORD_BOT_TOKEN` and `DISCORD_ALLOWED_USER_IDS` in `.env.local` |
+| Crashes on start: `USER_IDS=*` | Also set `DISCORD_ALLOWED_GUILD_IDS` or `DISCORD_ALLOWED_CHANNEL_IDS` |
 | Bot ignores you | Your user ID isn’t in the allowlist, or the channel isn’t in `DISCORD_ALLOWED_CHANNEL_IDS` |
+| Bot ignores everyone after setting `*` | DMs stay closed; use a server channel, or add your user ID next to `*` |
 | Bot ignores messages in a server | Enable **Message Content Intent** in the Developer Portal |
 | No slash commands | Re-invite with `applications.commands`; set `DISCORD_ALLOWED_GUILD_IDS` for instant guild sync |
 | Cursor never runs | Agent CLI missing; install it or set `CURSOR_BIN` to `agent.cmd` / `agent` |

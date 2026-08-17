@@ -29,7 +29,13 @@ export function loadDiscordConfig(rootDir: string = ROOT_DIR): DiscordConfig {
   }
 
   const discordAllowedUserIds = parseIdList(process.env.DISCORD_ALLOWED_USER_IDS);
-  assertDiscordAllowlistConfigured(discordAllowedUserIds);
+  const discordAllowedChannelIds = parseIdList(process.env.DISCORD_ALLOWED_CHANNEL_IDS);
+  const discordAllowedGuildIds = parseIdList(process.env.DISCORD_ALLOWED_GUILD_IDS);
+  assertDiscordAllowlistConfigured(
+    discordAllowedUserIds,
+    discordAllowedChannelIds,
+    discordAllowedGuildIds,
+  );
 
   const staleRaw = Number.parseInt(process.env.BRIDGE_LEASE_STALE_MS?.trim() || "90000", 10);
 
@@ -37,8 +43,8 @@ export function loadDiscordConfig(rootDir: string = ROOT_DIR): DiscordConfig {
     ...core,
     discordBotToken,
     discordAllowedUserIds,
-    discordAllowedChannelIds: parseIdList(process.env.DISCORD_ALLOWED_CHANNEL_IDS),
-    discordAllowedGuildIds: parseIdList(process.env.DISCORD_ALLOWED_GUILD_IDS),
+    discordAllowedChannelIds,
+    discordAllowedGuildIds,
     bridgeLeaseChannelId: process.env.BRIDGE_LEASE_CHANNEL_ID?.trim() || null,
     bridgeHost: resolveBridgeHost(process.env.BRIDGE_HOST),
     bridgeLeaseStaleMs: Number.isFinite(staleRaw) && staleRaw > 0 ? staleRaw : 90_000,

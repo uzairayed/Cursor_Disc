@@ -24,6 +24,7 @@ import type {
   VoiceBasedChannel,
 } from "discord.js";
 import prism from "prism-media";
+import { isAllowedDiscordUser, isPublicUserAllowlist } from "../allowlist.js";
 import type { DiscordConfig } from "../config.js";
 import { captureRouterReply } from "./capture-reply.js";
 import { stereoToMono } from "./pcm.js";
@@ -48,7 +49,10 @@ export class DiscordVoiceManager {
     if (!this.guildId || !this.channelId) {
       return "Not in a voice channel. Join a VC and run `/join`.";
     }
-    return `In voice channel <#${this.channelId}> (guild ${this.guildId}). Listening for allowlisted users.`;
+    const who = isPublicUserAllowlist(this.config.discordAllowedUserIds)
+      ? "any speaker"
+      : "allowlisted users";
+    return `In voice channel <#${this.channelId}> (guild ${this.guildId}). Listening for ${who}.`;
   }
 
   async join(interaction: ChatInputCommandInteraction): Promise<string> {
@@ -193,7 +197,7 @@ export class DiscordVoiceManager {
     const receiver = connection.receiver;
     receiver.speaking.on("start", (userId) => {
       if (this.speaking.has(userId)) return;
-      if (!this.config.discordAllowedUserIds.includes(userId)) return;
+      if (!isAllowedDiscordUser(userId, this.config.discordAllowedUserIds)) return;
       const mode = this.session?.getCaptureMode() ?? "closed";
       // Half-duplex: ignore audio while closed; allow stop-words during TTS.
       if (mode === "closed") return;
