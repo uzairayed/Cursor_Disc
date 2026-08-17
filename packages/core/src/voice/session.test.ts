@@ -20,16 +20,17 @@ describe("VoiceSession", () => {
   it("accepts any speaker when * is set", async () => {
     const speak = vi.fn(async () => undefined);
     const transcribe = vi.fn(async () => "what time is it");
+    const vadPush = vi.fn().mockReturnValueOnce(Buffer.from("utterance"));
     const session = new VoiceSession({
       allowedUserIds: ["*"],
       speak,
       transcribe,
+      createVad: () => ({ push: vadPush, flush: () => null }),
       now: () => new Date("2026-07-29T12:00:00Z"),
       ...base,
     });
 
     await session.onPcm("stranger", pcmLoud());
-    await session.flushUser("stranger");
     await flushCoalesce();
     expect(transcribe).toHaveBeenCalled();
   });

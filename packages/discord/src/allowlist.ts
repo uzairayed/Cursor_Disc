@@ -18,10 +18,7 @@ export function explicitAllowedUserIds(allowedUserIds: readonly string[]): strin
 }
 
 /** Voice / per-user checks: `*` means any speaker. */
-export function isAllowedDiscordUser(
-  userId: string,
-  allowedUserIds: readonly string[],
-): boolean {
+export function isAllowedDiscordUser(userId: string, allowedUserIds: readonly string[]): boolean {
   return isPublicUserAllowlist(allowedUserIds) || allowedUserIds.includes(userId);
 }
 
