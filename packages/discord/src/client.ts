@@ -24,21 +24,19 @@ import {
 } from "./allowlist.js";
 import { BridgeLeaseManager } from "./bridge-lease.js";
 import type { DiscordConfig } from "./config.js";
+import { isBotDirectlyMentioned, stripBotMentions } from "./message/mentions.js";
+import { resolveMessageContext } from "./message/message-context.js";
+import { resolvePlanApprovalReaction } from "./message/plan-reaction.js";
+import { mergeReplyIntoPrompt, resolveReplyContext } from "./message/reply-context.js";
+import { resolveReplyDestination } from "./message/reply-destination.js";
+import { isAllowedAttachment, saveDiscordAttachment } from "./message/save-attachment.js";
+import { createPreviewService, parsePreviewTextCommand } from "./preview/preview-handler.js";
 import {
   categoryNameOfChannel,
   ensureGuildProjectChannel,
   foreignDeviceFromCategory,
-} from "./ensure-project-channel-discord.js";
-import { isBotDirectlyMentioned, stripBotMentions } from "./mentions.js";
-import { resolveMessageContext } from "./message-context.js";
-import { resolvePlanApprovalReaction } from "./plan-reaction.js";
-import { createPreviewService, parsePreviewTextCommand } from "./preview-handler.js";
-import { ProjectChannelRegistry } from "./project-channels.js";
-import { registerSlashCommands } from "./register-slash-commands.js";
-import { mergeReplyIntoPrompt, resolveReplyContext } from "./reply-context.js";
-import { resolveReplyDestination } from "./reply-destination.js";
-import { isAllowedAttachment, saveDiscordAttachment } from "./save-attachment.js";
-import { handleDiscordSlashCommand } from "./slash-handler.js";
+} from "./projects/ensure-project-channel-discord.js";
+import { ProjectChannelRegistry } from "./projects/project-channels.js";
 import {
   buildForeignDeviceMessage,
   buildGeneralModeBanner,
@@ -46,7 +44,9 @@ import {
   buildProjectModeBanner,
   buildProjectRedirectMessage,
   resolveWorkspaceContext,
-} from "./workspace-context.js";
+} from "./projects/workspace-context.js";
+import { registerSlashCommands } from "./slash/register-slash-commands.js";
+import { handleDiscordSlashCommand } from "./slash/slash-handler.js";
 
 function extensionFor(
   name: string | null,

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { MessageRouter } from "@cursor-bridge/core";
 import { ChannelType } from "discord.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DiscordConfig } from "./config.js";
-import { ProjectChannelRegistry } from "./project-channels.js";
+import type { DiscordConfig } from "../config.js";
+import { ProjectChannelRegistry } from "../projects/project-channels.js";
 import { handleDiscordSlashCommand } from "./slash-handler.js";
 
 function emptyRegistry(): ProjectChannelRegistry {

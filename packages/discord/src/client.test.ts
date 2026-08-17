@@ -6,7 +6,7 @@ import { ChannelType } from "discord.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleDiscordMessage } from "./client.js";
 import type { DiscordConfig } from "./config.js";
-import { ProjectChannelRegistry } from "./project-channels.js";
+import { ProjectChannelRegistry } from "./projects/project-channels.js";
 
 function emptyRegistry(): ProjectChannelRegistry {
   const dir = mkdtempSync(join(tmpdir(), "cdc-reg-"));

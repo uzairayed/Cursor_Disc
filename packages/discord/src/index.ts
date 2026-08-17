@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { acquireProcessLock, MessageRouter, purgeOldFiles } from "@cursor-bridge/core";
 import { startDiscordBridge } from "./client.js";
 import { loadDiscordConfig } from "./config.js";
-import { createPreviewService } from "./preview-handler.js";
+import { createPreviewService } from "./preview/preview-handler.js";
 
 async function main(): Promise<void> {
   const config = loadDiscordConfig();

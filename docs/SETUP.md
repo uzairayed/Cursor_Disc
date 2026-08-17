@@ -245,4 +245,4 @@ Optional extras (after the basic flow works):
 - Voice assistant → see README “Voice assistant”
 - Phone preview → install `cloudflared` (see the table above), then `/preview` in a project channel
 
-Full feature reference: [README.md](./README.md).
+Full feature reference: [README.md](../README.md).

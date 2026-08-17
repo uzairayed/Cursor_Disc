@@ -4,7 +4,7 @@ Run [Cursor Agent](https://cursor.com) from Discord. The bridge stays on your co
 
 Works in DMs, server channels, and threads. Node 20+ on macOS, Linux, or Windows.
 
-Full install walkthrough: [SETUP.md](./SETUP.md).
+Full install walkthrough: [SETUP.md](./docs/SETUP.md).
 
 ## Quick start
 
@@ -38,16 +38,17 @@ Only allowlisted users (and channels, if you set them) can talk to the bot. Deta
 
 ## Optional extras
 
-**Voice:** join a voice channel, then `/join`. Needs `OPENAI_API_KEY` and `ffmpeg` on your PATH. Use headphones; say `stop` to interrupt. Spec: [VOICE_ASSISTANT_SPEC.md](./VOICE_ASSISTANT_SPEC.md).
+**Voice:** join a voice channel, then `/join`. Needs `OPENAI_API_KEY` and `ffmpeg` on your PATH. Use headphones; say `stop` to interrupt. Spec: [VOICE_ASSISTANT_SPEC.md](./docs/VOICE_ASSISTANT_SPEC.md).
 
 **Preview:** `/preview` tunnels a local dev server with Cloudflare so you can open it on your phone. Needs `cloudflared` on PATH. `/preview_pick` adds an element picker. `/preview_stop` tears it down.
 
 ## Layout
 
-| Package | What it is |
+| Path | What it is |
 | --- | --- |
 | `@cursor-bridge/core` | Router, queue, Cursor runner |
 | `@cursor-bridge/discord` | Discord bot entrypoint |
+| `docs/` | Setup guide and voice spec |
 
 ## Scripts
 
