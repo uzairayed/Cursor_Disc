@@ -101,9 +101,21 @@ describe("RealtimeSttSession", () => {
     const ws = FakeWebSocket.last!;
 
     const turn = (startMs: number, endMs: number, transcript: string) => {
-      ws.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started", audio_start_ms: startMs }));
-      ws.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_stopped", audio_end_ms: endMs }));
-      ws.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript }));
+      ws.emit(
+        "message",
+        JSON.stringify({ type: "input_audio_buffer.speech_started", audio_start_ms: startMs }),
+      );
+      ws.emit(
+        "message",
+        JSON.stringify({ type: "input_audio_buffer.speech_stopped", audio_end_ms: endMs }),
+      );
+      ws.emit(
+        "message",
+        JSON.stringify({
+          type: "conversation.item.input_audio_transcription.completed",
+          transcript,
+        }),
+      );
     };
 
     turn(0, 200, "What's the date?"); // noise blip -> hallucinated question

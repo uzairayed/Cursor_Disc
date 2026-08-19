@@ -84,7 +84,10 @@ describe("parseProjectIntent", () => {
       action: "select",
       key: second,
     });
-    expect(parseProjectIntent("switch to two", projects)).toEqual({ action: "select", key: second });
+    expect(parseProjectIntent("switch to two", projects)).toEqual({
+      action: "select",
+      key: second,
+    });
     expect(parseProjectIntent(`switch to ${keys.length + 1}`, projects)).toBeNull();
   });
 

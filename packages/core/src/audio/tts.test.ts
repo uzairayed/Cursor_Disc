@@ -77,7 +77,11 @@ describe("synthesizeSpeech", () => {
 
   it("sends playback speed and caches per speed", async () => {
     const fetchImpl = vi.fn().mockImplementation(async () => okResponse(Buffer.from("clip")));
-    const args = { apiKey: "sk-test", text: "Speedy.", fetchImpl: fetchImpl as unknown as typeof fetch };
+    const args = {
+      apiKey: "sk-test",
+      text: "Speedy.",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    };
 
     await collect(await synthesizeSpeech({ ...args, speed: 1.25 }));
     expect(JSON.parse(String(fetchImpl.mock.calls[0]![1].body)).speed).toBe(1.25);

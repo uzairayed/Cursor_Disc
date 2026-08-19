@@ -1,4 +1,3 @@
-import { Readable } from "node:stream";
 import {
   containsInterruptIntent,
   type MessageRouter,
