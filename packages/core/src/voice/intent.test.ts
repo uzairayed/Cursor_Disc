@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyVoiceIntent,
+  containsInterruptIntent,
+  isEchoOfSpokenReply,
   isEchoTranscript,
   isInterruptIntent,
   isTooThinForAgent,
@@ -14,6 +16,13 @@ describe("classifyVoiceIntent", () => {
     expect(classifyVoiceIntent("what time is it")).toEqual({ kind: "datetime" });
     expect(classifyVoiceIntent("tell me the date and time")).toEqual({ kind: "datetime" });
     expect(classifyVoiceIntent("what's today's date")).toEqual({ kind: "datetime" });
+    expect(classifyVoiceIntent("Hey, what's the time?")).toEqual({ kind: "datetime" });
+  });
+
+  it("does not hijack sentences that merely mention date or time", () => {
+    expect(classifyVoiceIntent("what's the date of the last commit").kind).toBe("agent");
+    expect(classifyVoiceIntent("fix the current time formatting in utils").kind).toBe("agent");
+    expect(classifyVoiceIntent("show me where we parse date and time strings").kind).toBe("agent");
   });
 
   it("detects TTS echo / self-hearing garbage", () => {
@@ -33,6 +42,25 @@ describe("classifyVoiceIntent", () => {
     expect(isInterruptIntent("stop")).toBe(true);
     expect(isInterruptIntent("shut up")).toBe(true);
     expect(isInterruptIntent("what's the date")).toBe(false);
+  });
+
+  it("finds stop words buried in natural or echo-merged speech", () => {
+    expect(containsInterruptIntent("okay stop")).toBe(true);
+    expect(containsInterruptIntent("please stop talking now")).toBe(true);
+    expect(containsInterruptIntent("stop stop stop")).toBe(true);
+    expect(containsInterruptIntent("everything looked fine but okay, stop.")).toBe(true);
+    expect(containsInterruptIntent("I'm stopping by the office later")).toBe(false);
+    expect(containsInterruptIntent("fix the login bug in cliproom")).toBe(false);
+  });
+
+  it("recognizes transcripts that are echoes of the bot's own reply", () => {
+    const reply = "I've updated the config and restarted the dev server for you.";
+    expect(isEchoOfSpokenReply("updated the config and restarted the dev server", reply)).toBe(
+      true,
+    );
+    expect(isEchoOfSpokenReply("fix the login bug in cliproom", reply)).toBe(false);
+    // Too short to judge — must never eat brief real prompts.
+    expect(isEchoOfSpokenReply("yes", reply)).toBe(false);
   });
 
   it("classifies bridge commands", () => {

@@ -81,6 +81,7 @@ describe("loadCoreConfig", () => {
     expect(cfg.cursorTimeoutMin).toBe(15);
     expect(cfg.openaiApiKey).toBeNull();
     expect(cfg.voiceTtsVoice).toBe("alloy");
+    expect(cfg.voiceTtsSpeed).toBe(1);
     expect(cfg.voiceSttMode).toBe("realtime");
     expect(cfg.retentionDays).toBe(7);
     expect(cfg.previewDefaultPort).toBe(3000);

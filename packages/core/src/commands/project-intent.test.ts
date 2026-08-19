@@ -74,6 +74,20 @@ describe("parseProjectIntent", () => {
     expect(parseProjectIntent(String(crmIndex), projects)).toBeNull();
   });
 
+  it("resolves 'switch to <number>' against the picker, digits or words", () => {
+    const projects = store();
+    const keys = projects.list();
+    const second = keys[1]!;
+    // No allowNumber needed: "switch to" names the picker slot explicitly.
+    expect(parseProjectIntent("switch to 2", projects)).toEqual({ action: "select", key: second });
+    expect(parseProjectIntent("switch to project 2", projects)).toEqual({
+      action: "select",
+      key: second,
+    });
+    expect(parseProjectIntent("switch to two", projects)).toEqual({ action: "select", key: second });
+    expect(parseProjectIntent(`switch to ${keys.length + 1}`, projects)).toBeNull();
+  });
+
   it("returns null for normal prompts", () => {
     const projects = store();
     expect(parseProjectIntent("refactor the auth middleware", projects)).toBeNull();

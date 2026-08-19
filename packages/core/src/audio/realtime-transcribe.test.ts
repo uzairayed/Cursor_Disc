@@ -53,10 +53,17 @@ describe("transcribeRealtimePcm", () => {
 
     expect(text).toBe("what's the date today");
     const ws = FakeWebSocket.last!;
-    expect(ws.url).toContain("gpt-realtime-whisper");
+    // A `?model=` param opens a conversation session and the transcription
+    // session.update is then rejected; the model must ride in that frame only.
+    expect(ws.url).toContain("intent=transcription");
+    expect(ws.url).not.toContain("model=");
     expect(ws.opts?.headers?.Authorization).toBe("Bearer sk-test");
     const types = ws.sent.map((s) => JSON.parse(s).type);
     expect(types[0]).toBe("session.update");
+    const session = JSON.parse(ws.sent[0]).session;
+    expect(session.type).toBe("transcription");
+    expect(session.audio.input.transcription.model).toBe("gpt-live-transcribe");
+    expect(session.audio.input.transcription.prompt).toBeTruthy();
     expect(types).toContain("input_audio_buffer.append");
     expect(types).toContain("input_audio_buffer.commit");
     void pcm;

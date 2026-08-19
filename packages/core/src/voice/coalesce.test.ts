@@ -9,10 +9,10 @@ describe("adaptiveCoalesceMs", () => {
 
   it("waits longer for thin or truncated agent fragments", () => {
     expect(adaptiveCoalesceMs("you")).toBeGreaterThan(adaptiveCoalesceMs("fix the login bug"));
-    expect(adaptiveCoalesceMs("latest news for")).toBeGreaterThan(400);
+    expect(adaptiveCoalesceMs("latest news for")).toBeGreaterThan(250);
   });
 
   it("uses a short window for complete agent asks", () => {
-    expect(adaptiveCoalesceMs("fix the login bug in cliproom")).toBe(400);
+    expect(adaptiveCoalesceMs("fix the login bug in cliproom")).toBe(250);
   });
 });

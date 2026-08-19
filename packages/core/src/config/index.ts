@@ -23,6 +23,8 @@ export interface AppConfig {
   openaiApiKey: string | null;
   /** OpenAI TTS voice name for Discord voice assistant (default alloy). */
   voiceTtsVoice: string;
+  /** TTS playback speed 0.25–4.0 (default 1). Optional so test fixtures stay small. */
+  voiceTtsSpeed?: number;
   /**
    * Voice STT backend: `realtime` = gpt-realtime-whisper (faster),
    * `batch` = gpt-4o-mini-transcribe. Default realtime.
@@ -95,6 +97,7 @@ export function loadCoreConfig(rootDir: string = ROOT_DIR): AppConfig {
     ),
     openaiApiKey: process.env.OPENAI_API_KEY?.trim() || null,
     voiceTtsVoice: process.env.VOICE_TTS_VOICE?.trim() || "alloy",
+    voiceTtsSpeed: clampSpeed(Number.parseFloat(process.env.VOICE_TTS_SPEED?.trim() || "1")),
     voiceSttMode:
       process.env.VOICE_STT_MODE?.trim()?.toLowerCase() === "batch" ? "batch" : "realtime",
     retentionDays: Math.max(1, Number.parseInt(process.env.RETENTION_DAYS?.trim() || "7", 10) || 7),
@@ -113,6 +116,12 @@ export function loadCoreConfig(rootDir: string = ROOT_DIR): AppConfig {
     logPrompts: /^(1|true|yes)$/i.test(process.env.LOG_PROMPTS?.trim() ?? ""),
     bridgeHost: process.env.BRIDGE_HOST?.trim() || osHostname(),
   };
+}
+
+/** OpenAI speech API accepts 0.25–4.0; anything else 400s the request. */
+function clampSpeed(speed: number): number {
+  if (!Number.isFinite(speed)) return 1;
+  return Math.min(4, Math.max(0.25, speed));
 }
 
 function clampPort(port: number): number {

@@ -1,8 +1,9 @@
 import { type VadOptions, VadSegmenter } from "../audio/vad.js";
 import {
   classifyVoiceIntent,
+  containsInterruptIntent,
+  isEchoOfSpokenReply,
   isEchoTranscript,
-  isInterruptIntent,
   isTooThinForAgent,
 } from "./intent.js";
 import { spokenChunksFromText } from "./reply-policy.js";
@@ -50,6 +51,7 @@ export class VoiceSession {
   private turnAbort: AbortController | null = null;
   private readonly queue: Array<{ userId: string; pcm: Buffer }> = [];
   private pendingParts: string[] = [];
+  private recentSpoken = "";
   private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly setTimeoutFn: typeof setTimeout;
   private readonly clearTimeoutFn: typeof clearTimeout;
@@ -85,6 +87,12 @@ export class VoiceSession {
     await this.handleUtterance(pcm);
   }
 
+  /** Transcript already produced by a streaming STT session — skips `transcribe`. */
+  async ingestTranscript(userId: string, transcript: string): Promise<void> {
+    if (!this.allowed.has(userId) || this.mode === "closed") return;
+    await this.handleTranscript(transcript.trim());
+  }
+
   async flushUser(userId: string): Promise<void> {
     if (!this.allowed.has(userId) || this.mode === "closed") return;
     const vad = this.vads.get(userId);
@@ -94,15 +102,20 @@ export class VoiceSession {
   }
 
   async say(text: string): Promise<void> {
-    await this.withTurn(
-      async (signal) => {
-        for (const chunk of spokenChunksFromText(text)) {
-          if (signal.aborted) return;
-          await this.deps.speak(chunk);
-        }
-      },
-      { allowInterrupt: true },
-    );
+    await this.withTurn((signal) => this.speakChunks(text, signal), { allowInterrupt: true });
+  }
+
+  /** External barge-in — e.g. live stop-word detection while TTS plays. */
+  async bargeIn(): Promise<void> {
+    await this.requestInterrupt();
+  }
+
+  private async speakChunks(text: string, signal: AbortSignal): Promise<void> {
+    this.recentSpoken = text;
+    for (const chunk of spokenChunksFromText(text)) {
+      if (signal.aborted) return;
+      await this.deps.speak(chunk);
+    }
   }
 
   private vadFor(userId: string): VadLike {
@@ -208,18 +221,30 @@ export class VoiceSession {
       );
       return;
     }
+    await this.handleTranscript(transcript);
+  }
+
+  private async handleTranscript(transcript: string): Promise<void> {
+    if (this.mode === "closed") return;
     if (!transcript) return;
+
+    // Barge-in check must run before echo filtering: with speakers, "stop"
+    // arrives merged into an echo of the bot's own words.
+    if (this.mode === "interrupt") {
+      if (containsInterruptIntent(transcript)) {
+        await this.requestInterrupt();
+      }
+      return;
+    }
 
     if (isEchoTranscript(transcript)) {
       console.log(`[voice] ignore echo transcript: ${transcript.slice(0, 80)}`);
       return;
     }
 
-    // Soft barge-in while TTS plays (headphones / push-to-talk still work).
-    if (this.mode === "interrupt") {
-      if (isInterruptIntent(transcript)) {
-        await this.requestInterrupt();
-      }
+    // Speaker echo of the reply the bot just gave — must not become a prompt.
+    if (this.recentSpoken && isEchoOfSpokenReply(transcript, this.recentSpoken)) {
+      console.log(`[voice] ignore own-speech echo: ${transcript.slice(0, 80)}`);
       return;
     }
 
@@ -262,10 +287,7 @@ export class VoiceSession {
     try {
       if (intent.kind === "datetime") {
         await this.withTurn(
-          async (signal) => {
-            if (signal.aborted) return;
-            await this.deps.speak(formatDateTime(this.deps.now?.() ?? new Date()));
-          },
+          (signal) => this.speakChunks(formatDateTime(this.deps.now?.() ?? new Date()), signal),
           { allowInterrupt: true },
         );
         return;
@@ -277,15 +299,9 @@ export class VoiceSession {
         }
         const reply = (await this.deps.handleCommand?.(intent.text)) ?? null;
         if (reply) {
-          await this.withTurn(
-            async (signal) => {
-              for (const chunk of spokenChunksFromText(reply)) {
-                if (signal.aborted) return;
-                await this.deps.speak(chunk);
-              }
-            },
-            { allowInterrupt: true },
-          );
+          await this.withTurn((signal) => this.speakChunks(reply, signal), {
+            allowInterrupt: true,
+          });
         }
         return;
       }
@@ -306,10 +322,7 @@ export class VoiceSession {
           const reply = (await this.deps.handleAgent?.(intent.text, signal)) ?? null;
           if (signal.aborted || !reply) return;
           await this.deps.onText?.(reply);
-          for (const chunk of spokenChunksFromText(reply)) {
-            if (signal.aborted) return;
-            await this.deps.speak(chunk);
-          }
+          await this.speakChunks(reply, signal);
         },
         { allowInterrupt: true },
       );
@@ -350,9 +363,11 @@ export function adaptiveCoalesceMs(transcript: string): number {
   const intent = classifyVoiceIntent(transcript);
   if (intent.kind === "datetime") return 0;
   if (intent.kind === "command") return 0;
+  // Server-side VAD endpoints turns properly, so mid-thought cuts are rarer and
+  // these windows no longer need to absorb a fixed silence timer.
   if (intent.kind === "agent") {
-    if (!intent.text || isTooThinForAgent(intent.text)) return 900;
-    return 400;
+    if (!intent.text || isTooThinForAgent(intent.text)) return 600;
+    return 250;
   }
-  return 400;
+  return 250;
 }
