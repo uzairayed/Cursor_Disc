@@ -1,6 +1,8 @@
-import { Readable } from "node:stream";
 import {
+  containsInterruptIntent,
   type MessageRouter,
+  parseProjectIntent,
+  RealtimeSttSession,
   synthesizeSpeech,
   transcribeVoicePcm,
   VoiceSession,
@@ -29,14 +31,26 @@ import { captureRouterReply } from "./capture-reply.js";
 import { stereoToMono } from "./pcm.js";
 
 const SAMPLE_RATE = 48_000;
+/**
+ * Only bounds how long one Discord subscription stays open — turn endpointing
+ * is now server-side VAD, so this no longer sits in the response path.
+ */
+const STREAM_END_MS = 700;
 
 export class DiscordVoiceManager {
   private session: VoiceSession | null = null;
+  private stt: RealtimeSttSession | null = null;
   private player = createAudioPlayer();
   private guildId: string | null = null;
   private channelId: string | null = null;
   private textChannelId: string | null = null;
   private speaking = new Set<string>();
+  private lastSpeaker: string | null = null;
+  /** Where voice prompts run; changed by a spoken "switch to <project>". */
+  private projectKey = "general";
+  /** Mic audio captured while TTS plays, scanned live for stop words. */
+  private interruptProbe: Buffer[] = [];
+  private probing = false;
 
   constructor(
     private readonly config: DiscordConfig,
@@ -48,7 +62,7 @@ export class DiscordVoiceManager {
     if (!this.guildId || !this.channelId) {
       return "Not in a voice channel. Join a VC and run `/join`.";
     }
-    return `In voice channel <#${this.channelId}> (guild ${this.guildId}). Listening for allowlisted users.`;
+    return `In voice channel <#${this.channelId}> (guild ${this.guildId}), project **${this.projectKey.toUpperCase()}**. Listening for allowlisted users.`;
   }
 
   async join(interaction: ChatInputCommandInteraction): Promise<string> {
@@ -86,8 +100,9 @@ export class DiscordVoiceManager {
     this.guildId = interaction.guild.id;
     this.channelId = channel.id;
     this.textChannelId = interaction.channelId;
-    this.attachReceiver(connection);
     this.session = this.createSession(interaction.guild.id);
+    await this.startStt();
+    this.attachReceiver(connection);
 
     connection.on("stateChange", (_old, next) => {
       if (
@@ -116,11 +131,82 @@ export class DiscordVoiceManager {
   }
 
   private clearSession(): void {
+    this.stt?.close();
+    this.stt = null;
     this.session = null;
     this.guildId = null;
     this.channelId = null;
     this.textChannelId = null;
     this.speaking.clear();
+    this.lastSpeaker = null;
+    this.projectKey = "general";
+    this.interruptProbe = [];
+  }
+
+  /**
+   * Live barge-in while TTS plays. Transcripts can't drive this: with speakers,
+   * the bot's echo keeps the server-VAD turn open for the whole reply, so no
+   * transcript arrives until the bot has already finished talking. Instead the
+   * raw mic capture is transcribed in ~1.2s windows and scanned for stop words.
+   * ponytail: worst case ~2s to react (window fill + one-shot batch STT);
+   * a streaming ASR with word timestamps would cut this but changes vendors.
+   */
+  private probeForStopWord(mono: Buffer): void {
+    this.interruptProbe.push(mono);
+    const bytes = this.interruptProbe.reduce((n, b) => n + b.byteLength, 0);
+    if (bytes < SAMPLE_RATE * 2 * 1.2 || this.probing) return;
+    const pcm = Buffer.concat(this.interruptProbe);
+    this.interruptProbe = [];
+    this.probing = true;
+    void (async () => {
+      try {
+        const { text } = await transcribeVoicePcm({
+          apiKey: this.config.openaiApiKey!,
+          pcm,
+          sampleRate: SAMPLE_RATE,
+          // Batch: a cold realtime socket costs ~3s; HTTP one-shot is ~1s.
+          mode: "batch",
+        });
+        if (containsInterruptIntent(text) && this.session?.getCaptureMode() === "interrupt") {
+          console.log(`[voice] barge-in: ${text.slice(0, 60)}`);
+          await this.session.bargeIn();
+        }
+      } catch {
+        // Best-effort — the transcript path still handles clean-turn stops.
+      } finally {
+        this.probing = false;
+      }
+    })();
+  }
+
+  /**
+   * Warm streaming transcription. If it can't connect we fall back to the
+   * per-utterance path, which is slower but keeps voice working.
+   */
+  private async startStt(): Promise<void> {
+    const stt = new RealtimeSttSession({
+      apiKey: this.config.openaiApiKey!,
+      onTranscript: (text) => {
+        const session = this.session;
+        const userId = this.lastSpeaker;
+        if (!session || !userId) return;
+        void session.ingestTranscript(userId, text).catch((err) => {
+          console.error("[voice] transcript failed:", err);
+        });
+      },
+      onError: (err) => {
+        console.error("[voice] stt session:", err.message);
+      },
+    });
+    try {
+      await stt.connect();
+      this.stt = stt;
+      console.log("[voice] stt streaming (server vad)");
+    } catch (err) {
+      stt.close();
+      this.stt = null;
+      console.error("[voice] streaming stt unavailable, using per-utterance stt:", err);
+    }
   }
 
   private async resolveTextChannel() {
@@ -140,6 +226,8 @@ export class DiscordVoiceManager {
 
     return new VoiceSession({
       allowedUserIds: this.config.discordAllowedUserIds,
+      // Echo is filtered by transcript, so this only needs to cover the TTS tail.
+      postSpeakMuteMs: 300,
       stopSpeaking: () => {
         this.player.stop(true);
       },
@@ -164,12 +252,20 @@ export class DiscordVoiceManager {
         return text;
       },
       handleCommand: async (text) => {
+        // Project navigation is a Discord-surface concern the router never sees
+        // (text channels handle it in client.ts), so voice intercepts it here.
+        const nav = parseProjectIntent(text, this.router.projects, { allowNumber: true });
+        if (nav?.action === "select") {
+          this.projectKey = nav.key;
+          return `Switched to ${nav.key}.`;
+        }
         const textChannel = await this.resolveTextChannel();
         return captureRouterReply({
           router: this.router,
           text,
           conversationKey,
           textChannel,
+          projectKey: this.projectKey,
         });
       },
       handleAgent: async (text, signal) => {
@@ -182,6 +278,7 @@ export class DiscordVoiceManager {
           conversationKey,
           asVoiceNote: true,
           textChannel,
+          projectKey: this.projectKey,
         });
         if (signal?.aborted) return null;
         return reply;
@@ -198,13 +295,10 @@ export class DiscordVoiceManager {
       // Half-duplex: ignore audio while closed; allow stop-words during TTS.
       if (mode === "closed") return;
       this.speaking.add(userId);
+      this.lastSpeaker = userId;
 
       const opusStream = receiver.subscribe(userId, {
-        end: {
-          behavior: EndBehaviorType.AfterSilence,
-          // ~1.1s silence end — snappier than 1.8s; coalesce still merges mid-thought cuts.
-          duration: 1100,
-        },
+        end: { behavior: EndBehaviorType.AfterSilence, duration: STREAM_END_MS },
       });
 
       const decoder = new prism.opus.Decoder({
@@ -213,17 +307,28 @@ export class DiscordVoiceManager {
         frameSize: 960,
       });
 
+      const streaming = this.stt;
       const chunks: Buffer[] = [];
       let finished = false;
       opusStream.pipe(decoder);
       decoder.on("data", (chunk: Buffer) => {
-        chunks.push(stereoToMono(chunk));
+        // Re-check per frame: the mode can close mid-subscription, and streaming
+        // audio while closed would bill for speech we intend to discard.
+        const mode = this.session?.getCaptureMode();
+        if (mode === "closed" || mode == null) return;
+        const mono = stereoToMono(chunk);
+        if (mode === "interrupt") this.probeForStopWord(mono);
+        else this.interruptProbe = [];
+        if (streaming) streaming.pushPcm(mono, SAMPLE_RATE);
+        else chunks.push(mono);
       });
 
       const finish = () => {
         if (finished) return;
         finished = true;
         this.speaking.delete(userId);
+        // Streaming path already forwarded audio; the server ends the turn.
+        if (streaming) return;
         const pcm = Buffer.concat(chunks);
         const session = this.session;
         if (!session) return;
@@ -248,22 +353,24 @@ export class DiscordVoiceManager {
     if (!this.config.openaiApiKey) return;
     // Stop any prior clip so chunked TTS / interrupts don't overlap.
     this.player.stop(true);
-    const audio = await synthesizeSpeech({
-      apiKey: this.config.openaiApiKey,
-      text,
-      voice: this.config.voiceTtsVoice,
-    });
-    const resource = createAudioResource(Readable.from(audio), {
-      inputType: StreamType.Arbitrary,
-    });
-    this.player.play(resource);
     try {
+      // Audio streams straight from OpenAI into ffmpeg, so playback starts on the
+      // first chunk. createAudioResource also throws synchronously when ffmpeg is
+      // missing, so it has to sit inside the guard or a missing ffmpeg fails /join.
+      const audio = await synthesizeSpeech({
+        apiKey: this.config.openaiApiKey,
+        text,
+        voice: this.config.voiceTtsVoice,
+        speed: this.config.voiceTtsSpeed,
+      });
+      const resource = createAudioResource(audio, { inputType: StreamType.Arbitrary });
+      this.player.play(resource);
       await entersState(this.player, AudioPlayerStatus.Playing, 5_000);
       await entersState(this.player, AudioPlayerStatus.Idle, 120_000);
     } catch (err) {
       // AbortError is expected when stopSpeaking() interrupts playback.
       if (err instanceof Error && /abort|ABORT/i.test(err.name + err.message)) return;
-      console.error("[voice] playback error (is ffmpeg installed?):", err);
+      console.error("[voice] speak failed (is ffmpeg installed?):", err);
     }
   }
 }

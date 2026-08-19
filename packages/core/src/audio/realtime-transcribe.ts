@@ -12,7 +12,7 @@ export type RealtimeTranscribeOpts = {
   /** Mono PCM s16le at `sampleRate`. */
   pcm: Buffer;
   sampleRate: number;
-  /** Default gpt-realtime-whisper */
+  /** Default gpt-live-transcribe */
   model?: string;
   prompt?: string;
   timeoutMs?: number;
@@ -24,7 +24,8 @@ export type RealtimeTranscribeOpts = {
  * Uses the same OPENAI_API_KEY as batch Whisper / TTS.
  */
 export async function transcribeRealtimePcm(opts: RealtimeTranscribeOpts): Promise<string> {
-  const model = opts.model ?? "gpt-realtime-whisper";
+  // gpt-realtime-whisper rejects `prompt`, which we rely on for command vocabulary.
+  const model = opts.model ?? "gpt-live-transcribe";
   const timeoutMs = opts.timeoutMs ?? 20_000;
   const WS = opts.WebSocketImpl ?? WebSocket;
 
@@ -39,7 +40,9 @@ export async function transcribeRealtimePcm(opts: RealtimeTranscribeOpts): Promi
   }
   if (pcm.byteLength < 2) throw new Error("Realtime STT received empty audio");
 
-  const url = `${REALTIME_URL}?model=${encodeURIComponent(model)}`;
+  // A `?model=` param opens a *conversation* session, which then rejects the
+  // transcription-mode session.update below. The model goes in that frame instead.
+  const url = `${REALTIME_URL}?intent=transcription`;
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;

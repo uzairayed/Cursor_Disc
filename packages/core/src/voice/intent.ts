@@ -3,8 +3,10 @@ export type VoiceIntent =
   | { kind: "command"; text: string }
   | { kind: "agent"; text: string };
 
+// Anchored to the full utterance: "what's the date of the last commit" or
+// "fix the current time formatting" must reach the agent, not the clock.
 const DATETIME =
-  /\b(what('?s| is) (the )?(date|time)( today| now)?|what('?s| is) today'?s date|what time is it|tell me the (date|time)|date and time|current (date|time)|today'?s date)\b/i;
+  /^(?:hey|hi|okay|ok|so|um|uh|please)?[,\s]*(?:what('?s| is) (the )?(date|time)( today| now)?|what('?s| is) today'?s date|what time is it|tell me the (date|time)( and (date|time))?|date and time|current (date|time)|today'?s date)[\s?.!]*$/i;
 
 const COMMANDS =
   /^(help|hi|hello|status|stop|stop all|new chat|plan|go|run|cancel plan|projects|current|what project am i on\??)(\b|$)/i;
@@ -28,6 +30,34 @@ export function isEchoTranscript(raw: string): boolean {
 export function isInterruptIntent(raw: string): boolean {
   const text = raw.trim().toLowerCase().replace(/\s+/g, " ");
   return /^(stop|stop all|cancel|shut up|quiet|enough|never ?mind|forget it)[.!]?$/.test(text);
+}
+
+/**
+ * Stop-word anywhere in the transcript. Barge-in speech is rarely a clean
+ * "stop" — it's "okay stop", "please stop talking", or a stop word buried in
+ * an echo-merged transcript of the bot's own reply.
+ */
+export function containsInterruptIntent(raw: string): boolean {
+  return /\b(stop|cancel|shut up|quiet|enough|never ?mind|forget it)\b/i.test(raw);
+}
+
+/**
+ * Transcript that is mostly words the bot itself just spoke — acoustic echo
+ * picked up from speakers. Word-overlap, so it works on partial echoes.
+ */
+export function isEchoOfSpokenReply(transcript: string, spoken: string): boolean {
+  const words = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s']/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
+  const heard = words(transcript);
+  // Too short to judge — short repeats ("yes", project names) must pass through.
+  if (heard.length < 3) return false;
+  const said = new Set(words(spoken));
+  const hits = heard.filter((w) => said.has(w)).length;
+  return hits / heard.length >= 0.6;
 }
 
 /** Fragments too short/incomplete to burn a Cursor agent turn. */

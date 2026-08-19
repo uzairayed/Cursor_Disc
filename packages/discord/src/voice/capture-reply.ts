@@ -26,18 +26,21 @@ export async function captureRouterReply(opts: {
   conversationKey: string;
   asVoiceNote?: boolean;
   textChannel?: TextBasedChannel | null;
+  /** Voice-session project; defaults to general. */
+  projectKey?: string;
 }): Promise<string | null> {
   const replies: string[] = [];
+  // Voice has no channel to derive a project from, so it stays pinned to the
+  // general workspace unless the speaker explicitly said "switch to <project>".
+  // Implicit inheritance from other channels would risk `--force` edits against
+  // a repo the speaker never named.
+  const projectKey = opts.projectKey ?? "general";
 
   const delivery: DeliveryContext = {
     platform: "discord",
-    // Voice has no channel to derive a project from, so it is pinned to the
-    // general workspace to match its general surface. Without this it would
-    // inherit whatever project was last touched in any channel and could run
-    // `--force` edits against a repo the speaker never named.
-    projectKey: "general",
+    projectKey,
     conversationKey: opts.conversationKey,
-    surface: "general",
+    surface: projectKey === "general" ? "general" : "project",
     maxChars: 1900,
     formatOutput: formatForDiscord,
     reply: async (text) => {

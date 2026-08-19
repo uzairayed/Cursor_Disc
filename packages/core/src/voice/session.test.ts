@@ -126,6 +126,89 @@ describe("VoiceSession", () => {
     await turn;
   });
 
+  it("honors a buried stop word during TTS via streamed transcripts", async () => {
+    const stopSpeaking = vi.fn();
+    let releaseSpeak = () => {};
+    const speak = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSpeak = resolve;
+        }),
+    );
+    const session = new VoiceSession({
+      allowedUserIds: ["owner"],
+      speak,
+      stopSpeaking,
+      transcribe: vi.fn().mockResolvedValue("what's the date today"),
+      ...base,
+      coalesceMs: 5,
+    });
+
+    const turn = session.ingestUtterance("owner", pcmLoud()).then(() => flushCoalesce());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(session.getCaptureMode()).toBe("interrupt");
+    // Not a clean "stop" — natural phrasing, as streaming STT delivers it.
+    await session.ingestTranscript("owner", "okay, please stop talking now");
+    expect(stopSpeaking).toHaveBeenCalled();
+    releaseSpeak();
+    await turn;
+  });
+
+  it("supports external bargeIn() while speaking", async () => {
+    const stopSpeaking = vi.fn();
+    let releaseSpeak = () => {};
+    const speak = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSpeak = resolve;
+        }),
+    );
+    const session = new VoiceSession({
+      allowedUserIds: ["owner"],
+      speak,
+      stopSpeaking,
+      transcribe: vi.fn().mockResolvedValue("what's the date today"),
+      ...base,
+      coalesceMs: 5,
+    });
+
+    const turn = session.ingestUtterance("owner", pcmLoud()).then(() => flushCoalesce());
+    await new Promise((r) => setTimeout(r, 30));
+    await session.bargeIn();
+    expect(stopSpeaking).toHaveBeenCalled();
+    releaseSpeak();
+    await turn;
+  });
+
+  it("drops open-mode transcripts that echo the bot's own reply", async () => {
+    const handleAgent = vi.fn(async () => "should not run");
+    const handleCommand = vi.fn(
+      async () => "I've updated the config and restarted the dev server for you.",
+    );
+    const session = new VoiceSession({
+      allowedUserIds: ["owner"],
+      speak: vi.fn(async () => undefined),
+      transcribe: vi.fn(async () => "status"),
+      handleCommand,
+      handleAgent,
+      ...base,
+    });
+
+    await session.ingestUtterance("owner", pcmLoud());
+    await flushCoalesce();
+    expect(handleCommand).toHaveBeenCalled();
+
+    // Speaker echo of that reply drifts back in once capture reopens.
+    await session.ingestTranscript("owner", "updated the config and restarted the dev server");
+    await flushCoalesce();
+    expect(handleAgent).not.toHaveBeenCalled();
+
+    // A genuinely new prompt still gets through.
+    await session.ingestTranscript("owner", "fix the login bug in cliproom");
+    await flushCoalesce();
+    expect(handleAgent).toHaveBeenCalledOnce();
+  });
+
   it("merges consecutive STT fragments before calling the agent", async () => {
     const handleAgent = vi.fn(async (_text: string) => "ok");
     const speak = vi.fn(async () => undefined);

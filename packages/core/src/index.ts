@@ -1,3 +1,4 @@
+export { RealtimeSttSession } from "./audio/realtime-session.js";
 export { transcribeAudio } from "./audio/transcribe.js";
 export { synthesizeSpeech } from "./audio/tts.js";
 export { transcribeVoicePcm } from "./audio/voice-stt.js";
@@ -19,4 +20,5 @@ export {
 export { formatForDiscord } from "./utils/discord-format.js";
 export { purgeOldFiles } from "./utils/housekeeping.js";
 export { acquireProcessLock } from "./utils/process-lock.js";
+export { containsInterruptIntent } from "./voice/intent.js";
 export { VoiceSession } from "./voice/session.js";
