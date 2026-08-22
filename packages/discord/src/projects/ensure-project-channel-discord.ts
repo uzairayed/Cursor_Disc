@@ -73,6 +73,9 @@ async function moveChannelIntoCategory(
     if (!ch || !isTextChannel(ch)) return;
     if (ch.parentId === categoryId) return;
     if (!("setParent" in ch) || typeof ch.setParent !== "function") return;
+    // Another device already owns this channel — moving it would yank
+    // e.g. Mac #tagiser-beta into the Windows category.
+    if (ch.parentId && ch.parentId !== categoryId) return;
     await ch.setParent(categoryId, {
       reason: `Place project ${projectKey} under device category`,
     });
@@ -104,7 +107,11 @@ export async function ensureGuildProjectChannel(opts: {
     channelExists: async (channelId) => {
       try {
         const ch = await guild.channels.fetch(channelId);
-        return Boolean(ch && isTextChannel(ch));
+        if (!ch || !isTextChannel(ch)) return false;
+        // Same project name on two machines = two channels. A registry hit
+        // that lives under another device category is not ours.
+        if (categoryId && ch.parentId && ch.parentId !== categoryId) return false;
+        return true;
       } catch {
         return false;
       }

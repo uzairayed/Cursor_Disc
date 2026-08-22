@@ -60,6 +60,17 @@ describe("ProjectStore live reload", () => {
     expect(resolved?.path).toBe(fleet);
   });
 
+  it("resolves spoken names with spaces to the dashed key", () => {
+    const { store, projectsFile, root } = setup();
+    const tagiser = join(root, "tagiser-beta");
+    mkdirSync(tagiser);
+    writeFileSync(projectsFile, JSON.stringify({ "tagiser-beta": tagiser }));
+
+    const resolved = store.resolve("tagiser beta");
+    expect(resolved?.key).toBe("tagiser-beta");
+    expect(resolved?.path).toBe(tagiser);
+  });
+
   it("lists device names from a devices config", () => {
     const { store, projectsFile, root } = setup();
     writeFileSync(

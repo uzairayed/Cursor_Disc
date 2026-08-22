@@ -294,6 +294,24 @@ describe("handleDiscordSlashCommand", () => {
     });
   });
 
+  it("opens a thread for /status from a guild parent channel", async () => {
+    const { interaction, starter } = mockInteraction({
+      commandName: "status",
+    });
+    const router = mockRouter();
+
+    await handleDiscordSlashCommand({
+      interaction: interaction as never,
+      config: baseConfig(),
+      router: router as never,
+      projectChannels: emptyRegistry(),
+    });
+
+    expect(starter.startThread).toHaveBeenCalledOnce();
+    expect(router.handle).toHaveBeenCalledOnce();
+    expect(router.handle.mock.calls[0]?.[1]?.conversationKey).toBe("discord:thread-slash");
+  });
+
   it("maps /status to the conversational router without opening a thread", async () => {
     const { interaction, starter } = mockInteraction({
       commandName: "status",

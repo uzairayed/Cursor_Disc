@@ -33,7 +33,7 @@ function looksLikeProject(dirPath: string): boolean {
   return existsSync(join(dirPath, "package.json")) || existsSync(join(dirPath, ".git"));
 }
 
-function projectKey(folderName: string): string {
+export function projectKey(folderName: string): string {
   return folderName
     .trim()
     .toLowerCase()

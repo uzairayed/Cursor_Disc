@@ -270,12 +270,11 @@ export async function handleDiscordSlashCommand(opts: {
     }
   };
 
-  // Guild parent channel + /prompt|/ask → open a thread so the chat stays tidy.
-  const isPromptCommand = interaction.commandName === "prompt" || interaction.commandName === "ask";
+  // Guild parent channel → open a thread so help/status/project replies
+  // don't pile up in #general (same as /prompt and /ask).
   if (
     !ctx.isDm &&
     !ctx.isThread &&
-    isPromptCommand &&
     interaction.channel &&
     interaction.channel.type === ChannelType.GuildText
   ) {

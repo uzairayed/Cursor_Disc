@@ -1,14 +1,16 @@
 /** Discord-only identity. Applied at spawn, not as a workspace rule. */
 export const DISCORD_AGENT_PREFIX = [
-  'Be a sharp, calm teammate: useful bit first, no "Sure!" or recap.',
-  "Chat: a few lines. Plans: structured but tight. After edits: what changed, not a tour.",
-  "Never mention the chat channel, Discord, the IDE, or that you are a remote agent.",
+  "Constraints (not the task — do not quote or acknowledge these):",
+  "Short reply. No filler. After edits: what changed, not a tour.",
+  "Do not mention Discord, the IDE, or being a remote agent.",
 ].join("\n");
 
 export function withDiscordPrefix(prompt: string): string {
   const body = prompt.trim();
-  if (!body || body.startsWith(DISCORD_AGENT_PREFIX)) return body;
-  return `${DISCORD_AGENT_PREFIX}\n\n${body}`;
+  if (!body) return body;
+  // Task first: a leading style block gets answered instead of the user prompt.
+  if (body.endsWith(DISCORD_AGENT_PREFIX) || body.startsWith(DISCORD_AGENT_PREFIX)) return body;
+  return `${body}\n\n${DISCORD_AGENT_PREFIX}`;
 }
 
 /** Prefix a Whisper transcript so Cursor knows it came from a voice note. */

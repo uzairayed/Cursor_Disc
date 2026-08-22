@@ -5,6 +5,7 @@ import {
   deviceNames as deviceNamesFromConfig,
   formatDevicePicker,
   loadProjectsConfig,
+  projectKey,
   type ProjectsMap,
 } from "./discover.js";
 
@@ -94,12 +95,12 @@ export class ProjectStore {
   }
 
   get(key: string): string | null {
-    return this.projects[key.toLowerCase()] ?? null;
+    return this.projects[projectKey(key)] ?? null;
   }
 
   resolve(key: string): ResolvedProject | null {
     this.reload();
-    const normalized = key.toLowerCase();
+    const normalized = projectKey(key);
     const raw = this.projects[normalized];
     if (!raw) return null;
     return { key: normalized, path: resolveProjectPath(raw), displayPath: raw };

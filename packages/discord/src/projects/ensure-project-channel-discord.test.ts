@@ -206,6 +206,55 @@ describe("ensureGuildProjectChannel", () => {
     );
   });
 
+  it("does not move a registered channel that already lives under another device category", async () => {
+    const reg = registry();
+    reg.set("g1", "tagiser-beta", "chan-mac");
+    const setParent = vi.fn();
+    const channels = new Map([
+      [
+        "chan-mac",
+        {
+          id: "chan-mac",
+          name: "tagiser-beta",
+          type: ChannelType.GuildText,
+          parentId: "cat-mac",
+          setParent,
+        },
+      ],
+      ["cat-mac", { id: "cat-mac", name: "macbook", type: ChannelType.GuildCategory }],
+      ["cat-win", { id: "cat-win", name: "windows-pc", type: ChannelType.GuildCategory }],
+    ]);
+
+    const guild = {
+      id: "g1",
+      channels: {
+        fetch: vi.fn(async (id?: string) => {
+          if (typeof id === "string") return channels.get(id) ?? null;
+          return channels;
+        }),
+        create: vi.fn(async (opts: { name: string; type: ChannelType; parent?: string }) => ({
+          id: opts.type === ChannelType.GuildCategory ? "cat-new" : "chan-win-tagiser",
+          name: opts.name,
+          type: opts.type,
+          parentId: opts.parent ?? null,
+          setParent: vi.fn(),
+        })),
+      },
+    };
+
+    const result = await ensureGuildProjectChannel({
+      guild: guild as never,
+      projectKey: "tagiser-beta",
+      registry: reg,
+      categoryName: "windows-pc",
+    });
+
+    expect(result.channelId).toBe("chan-win-tagiser");
+    expect(result.created).toBe(true);
+    expect(setParent).not.toHaveBeenCalled();
+    expect(reg.get("g1", "tagiser-beta")).toBe("chan-win-tagiser");
+  });
+
   it("does not adopt a channel that already lives under another device category", async () => {
     const reg = registry();
     const channels = new Map([

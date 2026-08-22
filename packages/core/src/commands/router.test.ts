@@ -10,8 +10,8 @@ import { DISCORD_AGENT_PREFIX } from "../prompts/agent-prompt.js";
 import { MessageRouter } from "./router.js";
 
 function userPrompt(prefixed: string): string {
-  const lead = `${DISCORD_AGENT_PREFIX}\n\n`;
-  return prefixed.startsWith(lead) ? prefixed.slice(lead.length) : prefixed;
+  const tail = `\n\n${DISCORD_AGENT_PREFIX}`;
+  return prefixed.endsWith(tail) ? prefixed.slice(0, -tail.length) : prefixed;
 }
 
 function idleResult(overrides: Partial<CursorRunResult> = {}): CursorRunResult {
