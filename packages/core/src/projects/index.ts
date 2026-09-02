@@ -5,8 +5,8 @@ import {
   deviceNames as deviceNamesFromConfig,
   formatDevicePicker,
   loadProjectsConfig,
-  projectKey,
   type ProjectsMap,
+  projectKey,
 } from "./discover.js";
 
 export type { PendingLargePrompt, PendingPlan, ProjectsMap };
