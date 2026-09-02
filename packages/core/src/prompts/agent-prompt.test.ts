@@ -7,10 +7,10 @@ import {
 } from "./agent-prompt.js";
 
 describe("withDiscordPrefix", () => {
-  it("prepends the Discord identity once", () => {
-    const out = withDiscordPrefix("fix login");
-    expect(out.startsWith(DISCORD_AGENT_PREFIX)).toBe(true);
-    expect(out.endsWith("fix login")).toBe(true);
+  it("puts the user task first so style lines are not treated as the prompt", () => {
+    const out = withDiscordPrefix("Do we have the latest changes from GitHub");
+    expect(out.startsWith("Do we have the latest changes from GitHub")).toBe(true);
+    expect(out.endsWith(DISCORD_AGENT_PREFIX)).toBe(true);
     expect(withDiscordPrefix(out)).toBe(out);
   });
 

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { discordProfile } from "../channels/profiles.js";
 import type { DeliveryContext } from "../channels/types.js";
 import type { AppConfig } from "../config/index.js";
+import { DISCORD_AGENT_PREFIX } from "../prompts/agent-prompt.js";
 import { MessageRouter } from "./router.js";
 
 function setup(): AppConfig {
@@ -82,8 +83,7 @@ describe("MessageRouter ask mode", () => {
 
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]![0]!.executionMode).toBe("ask");
-    expect(run.mock.calls[0]![0]!.prompt).toMatch(/sharp, calm teammate/);
-    expect(run.mock.calls[0]![0]!.prompt).toContain("What stack is this?");
+    expect(run.mock.calls[0]![0]!.prompt).toBe(`What stack is this?\n\n${DISCORD_AGENT_PREFIX}`);
     expect(replies.some((r) => /React app/i.test(r))).toBe(true);
   });
 
